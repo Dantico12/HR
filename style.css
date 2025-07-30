@@ -890,7 +890,83 @@ textarea.form-control {
     font-family: inherit;
     line-height: 1.6;
 }
-
+.deduction-preview {
+    background: rgba(255, 255, 255, 0.1);
+    
+    border-radius: 5px;
+    padding: 15px;
+    margin: 10px 0;
+}
+.deduction-preview h5 {
+    color: #495057;
+    margin-bottom: 10px;
+}
+.deduction-item {
+    display: flex;
+    justify-content: space-between;
+    margin: 5px 0;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.deduction-item:last-child {
+    border-bottom: none;
+    font-weight: bold;
+}
+.leave-balance-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+.balance-header {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 8px;
+}
+.balance-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    text-align: center;
+}
+.balance-item {
+    padding: 8px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+}
+.balance-allocated { border-left: 4px solid #007bff; }
+.balance-used { border-left: 4px solid #ffc107; }
+.balance-remaining { border-left: 4px solid #28a745; }
+.balance-negative { border-left: 4px solid #dc3545; }
+.warning-text {
+    color: #856404;
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+.info-text {
+    color: #0c5460;
+    background-color: #3ad0eb;
+    border: 1px solid #41d2e9;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 5px 0;
+}
+.unpaid-warning {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 8px;
+    border-radius: 4px;
+    margin: 5px 0;
+    font-weight: bold;
+}
 /* Application Info Styling */
 .application-info {
     background: rgba(255, 255, 255, 0.03);

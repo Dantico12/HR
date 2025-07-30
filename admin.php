@@ -113,13 +113,13 @@ function canCreateNewFinancialYear($mysqli) {
     // Check if current date is past the current financial year end date
     $current_fy_ended = $current_date > $current_fy['end_date'];
     
-    if (!$current_fy_ended) {
+    /*if (!$current_fy_ended) {
         return [
             'can_create' => false,
             'reason' => 'Current financial year (' . $current_fy['year_name'] . ') has not ended yet. It ends on ' . formatDate($current_fy['end_date']) . '.',
             'next_fy' => null
         ];
-    }
+    }*/
     
     // Check if next financial year already exists
     $next_fy = getNextFinancialYear($current_date);
@@ -150,7 +150,7 @@ function allocateLeaveToAllEmployees($mysqli, $financial_year_id) {
         $leave_types_result = $mysqli->query($leave_types_query);
         
         // Get all employees
-        $employees_query = "SELECT id FROM employees WHERE status = 'active'";
+        $employees_query = "SELECT id FROM employees WHERE status = 'active' AND employment_type = 'permanent'";
         $employees_result = $mysqli->query($employees_query);
         
         $allocated_count = 0;

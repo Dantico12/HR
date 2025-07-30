@@ -147,11 +147,10 @@ $conn->close();
                     <li><a href="departments.php">Departments</a></li>
                     <?php endif; ?>
                     <?php if (hasPermission('super_admin')): ?>
-                    <li><a href="admin.php?tab=users">Admin</a></li>                     
-                    <?php endif; ?>
-                    <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="admin.php?tab=financial">Admin</a></li>
-                    <?php endif; ?>
+                   <li><a href="admin.php?tab=users">Admin</a></li>
+                   <?php elseif (hasPermission('hr_manager')): ?>
+                  <li><a href="admin.php?tab=financial">Admin</a></li>
+                   <?php endif; ?>
                     <?php if (hasPermission('hr_manager')): ?>
                     <li><a href="reports.php">Reports</a></li>
                     <?php endif; ?>

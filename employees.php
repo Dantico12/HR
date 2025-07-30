@@ -25,10 +25,13 @@ function hasPermission($requiredRole) {
     
     // Permission hierarchy
     $roles = [
-        'section_head'=>4,
-        'super_admin' => 3,
-        'hr_manager' => 2,
-        'dept_head' => 1,
+
+        'managing_director' => 6,
+        'super_admin' => 5,
+        'hr_manager' => 4,
+        'dept_head' => 3,
+        'section_head' => 2,
+        'manager' => 1,
         'employee' => 0
     ];
     
@@ -85,6 +88,9 @@ function redirectWithMessage($url, $message, $type = 'info') {
 }
 
 function sanitizeInput($data) {
+    if ($data === null) {
+        return '';
+    }
     return htmlspecialchars(stripslashes(trim($data)));
 }
 
@@ -97,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $employee_id = sanitizeInput($_POST['employee_id']);
             $first_name = sanitizeInput($_POST['first_name']);
             $last_name = sanitizeInput($_POST['last_name']);
+            $gender = isset($_POST['gender']) ? sanitizeInput($_POST['gender']) : '';
             $national_id = sanitizeInput($_POST['national_id']);
             $email = sanitizeInput($_POST['email']);
             $phone = sanitizeInput($_POST['phone']);
@@ -104,9 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $date_of_birth = $_POST['date_of_birth'];
             $hire_date = $_POST['hire_date'];
             $designation = sanitizeInput($_POST['designation']) ?: 'Employee';
-            $department_id = $_POST['department_id'];
+            $department_id =! empty( $_POST['department_id']) ? $_POST['department_id'] : null;
             $section_id = !empty($_POST['section_id']) ? $_POST['section_id'] : null;
-            $employee_type = $_POST['employee_type'];
+            $employee_type = $_POST['employee_type'] ;
             $employment_type = $_POST['employment_type'] ?: 'permanent';
 
             try {
@@ -115,11 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Insert employee record
                 $full_name = trim($first_name . ' ' . $last_name);
-                $stmt = $conn->prepare("INSERT INTO employees (employee_id, first_name, last_name, national_id, phone, email, date_of_birth, designation, department_id, section_id, employee_type, employment_type, address, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssssssiisssss", 
+                $stmt = $conn->prepare("INSERT INTO employees (employee_id, first_name, last_name,gender, national_id, phone, email, date_of_birth, designation, department_id, section_id, employee_type, employment_type, address, hire_date) VALUES (?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssssssssssssss", 
                     $employee_id, 
                     $first_name, 
                     $last_name, 
+                    $gender,
                     $national_id, 
                     $phone, 
                     $email, 
@@ -164,12 +172,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hashed_password = password_hash($employee_id, PASSWORD_DEFAULT);
                 
                 // Insert user record
-                $user_stmt = $conn->prepare("INSERT INTO users (email, first_name, last_name, password, role, phone, address, employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+                $user_stmt = $conn->prepare("INSERT INTO users (email, first_name, last_name, gender,password, role, phone, address, employee_id, created_at, updated_at) VALUES (?, ?, ?,?, ?, ?, ?, ?, ?, NOW(), NOW())");
                 
-                $user_stmt->bind_param("ssssssss", 
+                $user_stmt->bind_param("sssssssss", 
                     $email, 
                     $first_name, 
                     $last_name, 
+                    $gender,
                     $hashed_password, 
                     $user_role, 
                     $phone, 
@@ -188,11 +197,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->rollback();
                 $error = 'Error adding employee: ' . $e->getMessage();
             }
-        } elseif ($action === 'edit' && hasPermission('hr_manager')) {
+        } } elseif ($action === 'edit' && hasPermission('hr_manager')) {
             $id = $_POST['id'];
             $employee_id = sanitizeInput($_POST['employee_id']);
             $first_name = sanitizeInput($_POST['first_name']);
             $last_name = sanitizeInput($_POST['last_name']);
+            $gender = isset($_POST['gender']) ? sanitizeInput($_POST['gender']) : '';
             $national_id = sanitizeInput($_POST['national_id']);
             $email = sanitizeInput($_POST['email']);
             $phone = sanitizeInput($_POST['phone']);
@@ -200,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $date_of_birth = $_POST['date_of_birth'];
             $hire_date = $_POST['hire_date'];
             $designation = sanitizeInput($_POST['designation']);
-            $department_id = $_POST['department_id'];
+            $department_id = !empty($_POST['department_id']) ? $_POST['department_id'] : null;
             $section_id = !empty($_POST['section_id']) ? $_POST['section_id'] : null;
             $employee_type = $_POST['employee_type'];
             $employment_type = $_POST['employment_type'];
@@ -219,14 +229,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $old_employee_id = $current_employee['employee_id'];
                 
                 // Update employee record
-                $full_name = trim($first_name . ' ' . $last_name);
-                $stmt = $conn->prepare("UPDATE employees SET employee_id=?, first_name=?, last_name=?, national_id=?, email=?, phone=?, address=?, date_of_birth=?, hire_date=?, designation=?, department_id=?, section_id=?, employee_type=?, employment_type=?, employee_status=?, updated_at=NOW() WHERE id=?");
+                $stmt = $conn->prepare("UPDATE employees SET 
+                    employee_id=?, 
+                    first_name=?, 
+                    last_name=?, 
+                    gender=?, 
+                    national_id=?, 
+                    email=?, 
+                    phone=?, 
+                    address=?, 
+                    date_of_birth=?, 
+                    hire_date=?, 
+                    designation=?, 
+                    department_id=?, 
+                    section_id=?, 
+                    employee_type=?, 
+                    employment_type=?, 
+                    employee_status=?, 
+                    updated_at=NOW() 
+                    WHERE id=?");
                 
-                // Bind parameters
-                $stmt->bind_param("ssssssssssiisssi", 
+                $stmt->bind_param("ssssssssssiissssi", 
                     $employee_id, 
                     $first_name, 
                     $last_name, 
+                    $gender,
                     $national_id, 
                     $email, 
                     $phone, 
@@ -242,7 +269,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $id
                 );
                 
-                $stmt->execute();
+                if (!$stmt->execute()) {
+                    throw new Exception("Execute failed: (" . $stmt->errno . ") " . $stmt->error);
+                }
                 
                 // Determine user role based on employee type
                 $user_role = 'employee'; // default role
@@ -266,12 +295,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Update corresponding user record
-                $user_update_stmt = $conn->prepare("UPDATE users SET email=?, first_name=?, last_name=?, role=?, phone=?, address=?, employee_id=?, updated_at=NOW() WHERE employee_id=?");
+                $user_update_stmt = $conn->prepare("UPDATE users SET email=?, first_name=?, last_name=?,gender=?,role=?, phone=?, address=?, employee_id=?, updated_at=NOW() WHERE employee_id=?");
                 
                 $user_update_stmt->bind_param("ssssssss", 
                     $email, 
                     $first_name, 
-                    $last_name, 
+                    $last_name,
+                    $gender,
                     $user_role, 
                     $phone, 
                     $address, 
@@ -292,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-}
+
 
 // Get filter parameters
 $search = $_GET['search'] ?? '';
@@ -587,6 +617,16 @@ $applicationsQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
                         <input type="text" class="form-control" id="last_name" name="last_name" required>
                     </div>
                     <div class="form-group">
+                        <label for="edit_employment_type">Gender</label>
+                        <select class="form-control" id="edit_gender" name="edit_gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                           
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label for="national_id">National ID</label>
                         <input type="text" class="form-control" id="national_id" name="national_id" required>
                     </div>
@@ -704,6 +744,15 @@ $applicationsQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
                     <div class="form-group">
                         <label for="edit_last_name">Last Name</label>
                         <input type="text" class="form-control" id="edit_last_name" name="last_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_employment_type">Gender</label>
+                        <select class="form-control" id="edit_gender" name="edit_gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                           
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="edit_national_id">National ID</label>
@@ -854,6 +903,15 @@ $applicationsQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
             const employeeType = document.getElementById('employee_type').value;
             const departmentGroup = document.getElementById('department_group');
             const sectionGroup = document.getElementById('section_group');
+            const sectionSelect = document.getElementById('section_id');
+            const departmentId = document.getElementById('department_id');
+
+            //Always hide both fields and clear their valued first
+
+            departmentGroup.style.display = 'none';
+            sectionGroup.style.display = 'none';
+            departmentId.value='';
+            sectionId.value='';
             
             if (employeeType === 'managing_director' || employeeType === 'bod_chairman') {
                 departmentGroup.style.display = 'none';

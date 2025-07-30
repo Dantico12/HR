@@ -20,9 +20,12 @@ function hasPermission($requiredRole) {
     
     // Permission hierarchy
     $roles = [
-        'super_admin' => 3,
-        'hr_manager' => 2,
-        'dept_head' => 1,
+        'managing_director' => 6,
+        'super_admin' => 5,
+        'hr_manager' => 4,
+        'dept_head' => 3,
+        'section_head' => 2,
+        'manager' => 1,
         'employee' => 0
     ];
     
@@ -317,6 +320,7 @@ $users = $result->fetch_all(MYSQLI_ASSOC);
                             <option value="dept_head">Department Head</option>
                             <option value="section_head">Section Head</option>
                             <option value="manager">Manager</option>
+                            <option value="managing_director">Managing Director</option>
                             <option value="employee">Employee</option>
                         </select>
                     </div>
@@ -390,6 +394,7 @@ $users = $result->fetch_all(MYSQLI_ASSOC);
                             <option value="dept_head">Department Head</option>
                             <option value="section_head">Section Head</option>
                             <option value="manager">Manager</option>
+                            <option value="managing_director">Managing Director</option>
                             <option value="employee">Employee</option>
                         </select>
                     </div>
