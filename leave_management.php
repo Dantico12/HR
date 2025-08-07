@@ -3,7 +3,7 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 ob_start();
-
+//Changes and pushed
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
@@ -117,6 +117,7 @@ function getLeaveTypeDetails($leaveTypeId, $conn) {
     $result = $stmt->get_result();
     return $result->fetch_assoc();
 }
+
 function getLeaveTypeBalance($employeeId, $leaveTypeId, $conn) {
     // First, get leave type details
     $leaveType = getLeaveTypeDetails($leaveTypeId, $conn);
@@ -133,17 +134,18 @@ function getLeaveTypeBalance($employeeId, $leaveTypeId, $conn) {
         ];
     }
 
- // Initialize default values
- $balance = [
-    'allocated' => 0,
-    'used' => 0,
-    'remaining' => 0,
-    'leave_type_id' => $leaveTypeId,
-    'leave_type_name' => $leaveType['name'],
-    'max_days_per_year' => $leaveType['max_days_per_year'] ?? 0,
-    'counts_weekends' => $leaveType['counts_weekends'] ?? 0,
-    'deducted_from_annual' => $leaveType['deducted_from_annual'] ?? 0
-];
+    // Initialize default values
+    $balance = [
+        'allocated' => 0,
+        'used' => 0,
+        'remaining' => 0,
+        'leave_type_id' => $leaveTypeId,
+        'leave_type_name' => $leaveType['name'],
+        'max_days_per_year' => $leaveType['max_days_per_year'] ?? 0,
+        'counts_weekends' => $leaveType['counts_weekends'] ?? 0,
+        'deducted_from_annual' => $leaveType['deducted_from_annual'] ?? 0
+    ];
+
     // Determine which columns to use based on leave type
     $isAnnual = (stripos($leaveType['name'], 'annual') !== false);
     $isSick = (stripos($leaveType['name'], 'sick') !== false);
@@ -155,10 +157,10 @@ function getLeaveTypeBalance($employeeId, $leaveTypeId, $conn) {
     if ($isAnnual) {
         // For annual leave, we have entitled/used/balance columns
         $query = "SELECT 
-                    annual_leave_entitled as allocated,
-                    annual_leave_used as used,
-                    annual_leave_balance as remaining
-                  FROM leave_balances 
+                    allocated_days as allocated,
+                    used_days as used,
+                    remaining_days as remaining
+                  FROM employee_leave_balances 
                   WHERE employee_id = ? AND leave_type_id = ?";
     } else {
         // For other leave types, we only have used columns
@@ -196,7 +198,7 @@ function getLeaveTypeBalance($employeeId, $leaveTypeId, $conn) {
     $remaining = $allocated;
     
     // Check if a record exists for this employee and year (regardless of leave_type_id)
-    $checkExisting = "SELECT id FROM leave_balances WHERE employee_id = ? AND financial_year = ?";
+    $checkExisting = "SELECT id FROM employee_leave_balances WHERE employee_id = ? AND financial_year_id = ?";
     $checkStmt = $conn->prepare($checkExisting);
     $checkStmt->bind_param("ii", $employeeId, $currentYear);
     $checkStmt->execute();
@@ -492,280 +494,301 @@ $employee = null;
 $leaveBalance = null;
 $leaveHistory = [];
 
+// Get leave types that this employee has been allocated (only for current financial year)
+if ($userEmployee) {
+    // First get the latest financial_year_id
+    $latestYearQuery = "SELECT MAX(financial_year_id) as latest_year FROM employee_leave_balances";
+    $latestYearResult = $conn->query($latestYearQuery);
+    $latestYear = $latestYearResult->fetch_assoc()['latest_year'];
+    
+    $leaveTypesQuery = "SELECT lt.* 
+                       FROM leave_types lt
+                       JOIN employee_leave_balances elb ON lt.id = elb.leave_type_id
+                       WHERE elb.employee_id = ? 
+                       AND elb.financial_year_id = ?
+                       AND lt.is_active = 1
+                       ORDER BY lt.name";
+    $stmt = $conn->prepare($leaveTypesQuery);
+    $stmt->bind_param("ii", $userEmployee['id'], $latestYear);
+    $stmt->execute();
+    $leaveTypes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+} else {
+    $leaveTypes = []; // Empty array if no employee record
+}
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     switch ($action) {
-         // In the 'apply_leave' case of the POST handling section
-case 'apply_leave':
-    $employeeId = isset($_POST['employee_id']) ? (int)$_POST['employee_id'] : ($userEmployee['id'] ?? 0);
-    $leaveTypeId = (int)$_POST['leave_type_id'];
-    $startDate = $_POST['start_date'];
-    $endDate = $_POST['end_date'];
-    $reason = sanitizeInput($_POST['reason']);
+        case 'apply_leave':
+            $employeeId = isset($_POST['employee_id']) ? (int)$_POST['employee_id'] : ($userEmployee['id'] ?? 0);
+            $leaveTypeId = (int)$_POST['leave_type_id'];
+            $startDate = $_POST['start_date'];
+            $endDate = $_POST['end_date'];
+            $reason = sanitizeInput($_POST['reason']);
 
-    // Get leave type details for calculation
-    $leaveType = getLeaveTypeDetails($leaveTypeId, $conn);
-    
-    if (!$leaveType) {
-        $error = "Invalid leave type selected.";
-        break;
-    }
-
-    // Calculate days based on leave type settings
-    $days = calculateBusinessDays($startDate, $endDate, $conn, $leaveType['counts_weekends'] == 0);
-
-    // Calculate deduction plan
-    $deductionPlan = calculateLeaveDeduction($employeeId, $leaveTypeId, $days, $conn);
-    
-    if (!$deductionPlan['is_valid']) {
-        $error = implode(' ', $deductionPlan['warnings']);
-        break;
-    }
-
-    try {
-        $conn->begin_transaction();
-
-        // Get the section head and department head for this employee
-        $getManagersQuery = "SELECT
-            e.section_id, e.department_id,
-            (SELECT e2.id FROM employees e2 JOIN users u2 ON u2.employee_id = e2.employee_id WHERE e2.section_id = e.section_id AND u2.role = 'section_head' LIMIT 1) as section_head_emp_id,
-            (SELECT e3.id FROM employees e3 JOIN users u3 ON u3.employee_id = e3.employee_id WHERE e3.department_id = e.department_id AND u3.role = 'dept_head' LIMIT 1) as dept_head_emp_id
-            FROM employees e WHERE e.id = ?";
-        $stmt = $conn->prepare($getManagersQuery);
-        $stmt->bind_param("i", $employeeId);
-        $stmt->execute();
-        $managersResult = $stmt->get_result();
-        $managers = $managersResult->fetch_assoc();
-        
-        $sectionHeadEmpId = $managers['section_head_emp_id'] ?? null;
-        $deptHeadEmpId = $managers['dept_head_emp_id'] ?? null;
-        
-        // Set initial status
-        $initialStatus = 'pending_section_head';
-        
-       // Check if applicant is a section head - then needs dept head approval
-    if (hasPermission('section_head')) {
-      $initialStatus = 'pending_dept_head';
-     }
-  
-     // Check if applicant is a dept head - then needs managing director approval
-     if (hasPermission('dept_head')) {
-      $initialStatus = 'pending_managing_director';
-  }
-  
-      // Check if applicant is managing director - then needs HR approval
-       if (hasPermission('managing_director')) {
-      $initialStatus = 'pending_hr_manager';
-      // For MD applications, we'll set both section_head and dept_head to null
-      $sectionHeadEmpId = null;
-      $deptHeadEmpId = null;
-       }
-
-        // Insert application with deduction details
-        $deductionDetails = json_encode($deductionPlan);
-        $stmt = $conn->prepare("INSERT INTO leave_applications
-            (employee_id, leave_type_id, start_date, end_date, days_requested, reason,
-             status, applied_at, section_head_emp_id, dept_head_emp_id, deduction_details,
-             primary_days, annual_days, unpaid_days)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)");
-        
-        // Count the number of parameters to bind
-        $params = [
-            $employeeId, 
-            $leaveTypeId, 
-            $startDate, 
-            $endDate,
-            $days, 
-            $reason, 
-            $initialStatus,
-            $sectionHeadEmpId,
-            $deptHeadEmpId,
-            $deductionDetails,
-            $deductionPlan['primary_deduction'],
-            $deductionPlan['annual_deduction'],
-            $deductionPlan['unpaid_days']
-        ];
-        
-        // Create type string dynamically
-        $types = str_repeat('s', count($params));
-        
-        // Replace first 2 with 'i' for integer parameters
-        $types[0] = 'i';
-        $types[1] = 'i';
-        $types[7] = 'i'; // section_head_emp_id
-        $types[8] = 'i'; // dept_head_emp_id
-        $types[10] = 'i'; // primary_days
-        $types[11] = 'i'; // annual_days
-        $types[12] = 'i'; // unpaid_days
-        
-        $stmt->bind_param($types, ...$params);
-
-        if ($stmt->execute()) {
-            $applicationId = $conn->insert_id;
+            // Get leave type details for calculation
+            $leaveType = getLeaveTypeDetails($leaveTypeId, $conn);
             
-            // Log the transaction
-            logLeaveTransaction($applicationId, $employeeId, $leaveTypeId, $days, $deductionPlan, $conn);
-            
-            // Log to leave_history
-            $historyStmt = $conn->prepare("INSERT INTO leave_history 
-                                          (leave_application_id, action, performed_by, comments, performed_at) 
-                                          VALUES (?, 'applied', ?, ?, NOW())");
-            $comment = "Leave application submitted for $days days";
-            $historyStmt->bind_param("iis", $applicationId, $user['id'], $comment);
-            $historyStmt->execute();
-            
-            $conn->commit();
-            $warningMessages = implode('<br>', $deductionPlan['warnings']);
-            $success = "Leave application submitted successfully!<br><strong>Deduction Summary:</strong><br>" . $warningMessages;
-        } else {
-            $conn->rollback();
-            $error = "Error submitting application: " . $conn->error;
-        }
-    } catch (Exception $e) {
-        $conn->rollback();
-        $error = "Database error: " . $e->getMessage();
-    }
-    break;
-
-    case 'approve_leave':
-        // First check if user has permission to approve this type of leave
-        $applicationId = (int)$_POST['application_id'];
-        $approverComments = sanitizeInput($_POST['approver_comments']);
-        
-        try {
-            $conn->begin_transaction();
-            
-            // Get application details and applicant info
-            $stmt = $conn->prepare("SELECT la.*, lt.*, e.id as emp_id, u.role as applicant_role,
-                                   u2.role as approver_role
-                                   FROM leave_applications la
-                                   JOIN leave_types lt ON la.leave_type_id = lt.id
-                                   JOIN employees e ON la.employee_id = e.id
-                                   JOIN users u ON u.employee_id = e.id
-                                   LEFT JOIN users u2 ON u2.id = ?
-                                   WHERE la.id = ?");
-            $stmt->bind_param("ii", $user['id'], $applicationId);
-            $stmt->execute();
-            $application = $stmt->get_result()->fetch_assoc();
-            
-            // Check if approver is trying to approve their own leave
-            if ($application['employee_id'] == $user['employee_id']) {
-                throw new Exception("You cannot approve your own leave application");
+            if (!$leaveType) {
+                $error = "Invalid leave type selected.";
+                break;
             }
+
+            // Calculate days based on leave type settings
+            $days = calculateBusinessDays($startDate, $endDate, $conn, $leaveType['counts_weekends'] == 0);
+
+            // Calculate deduction plan
+            $deductionPlan = calculateLeaveDeduction($employeeId, $leaveTypeId, $days, $conn);
             
-            // Determine required approval based on current status and applicant's role
-            $canApprove = false;
-            $newStatus = 'approved'; // Default final status
-            
-            switch ($application['status']) {
-                case 'pending_section_head':
-                    // Can be approved by section head or HR
-                    $canApprove = (hasPermission('section_head') && $user['employee_id'] == $application['section_head_emp_id']) 
-                               || hasPermission('hr_manager');
-                    // If there's a dept head, move to next level, otherwise approve
-                    $newStatus = ($application['dept_head_emp_id'] ? 'pending_dept_head' : 'approved');
-                    break;
-                    
-                case 'pending_dept_head':
-                    // Can be approved by dept head or HR
-                    $canApprove = (hasPermission('dept_head') && $user['employee_id'] == $application['dept_head_emp_id']) 
-                               || hasPermission('hr_manager');
-                    $newStatus = 'approved';
-                    break;
-                    
-                case 'pending_managing_director':
-                    // Can be approved by managing director or HR
-                    $canApprove = hasPermission('managing_director') || hasPermission('hr_manager');
-                    $newStatus = 'approved';
-                    break;
-                    
-                case 'pending_hr_manager':
-                    // Only HR can approve managing director's leave
-                    $canApprove = hasPermission('hr_manager')|| hasPermission('managing_director');
-                    // If this is HR's approval, we finalize the application
-                    if (hasPermission('hr_manager')) {  
-                        $newStatus = 'approved';
-                    } else {
-                        // If managing director is approving, we can finalize
-                        $newStatus = 'approved';
-                    }
-                    break;
-                    $newStatus = 'approved';
-                    break;
-                    
-                default:
-                    throw new Exception("This application is not in a state that can be approved");
+            if (!$deductionPlan['is_valid']) {
+                $error = implode(' ', $deductionPlan['warnings']);
+                break;
             }
-            
-            if (!$canApprove) {
-                throw new Exception("You don't have permission to approve this leave application");
-            }
-            
-            // Get leave type details
-            $leaveType = $application;
-            $requestedDays = $application['days_requested'];
-    
-            // Get current balance for this leave type
-            $balance = getLeaveTypeBalance($application['employee_id'], $application['leave_type_id'], $conn);
-            $remaining = $balance['remaining'];
-    
-            // Check if deduction from annual leave is needed
-            $deductedFromAnnual = 0;
-            $fallbackUsed = 0;
-            
-            if ($remaining < $requestedDays) {
-                if ($leaveType['deducted_from_annual'] == 1 && stripos($leaveType['name'], 'maternity') === false) {
-                    // Get annual leave balance
-                    $annualTypeId = getAnnualLeaveTypeId($conn);
-                    $annualBalance = getLeaveTypeBalance($application['employee_id'], $annualTypeId, $conn);
+
+            try {
+                $conn->begin_transaction();
+
+                // Get the section head and department head for this employee
+                $getManagersQuery = "SELECT
+                    e.section_id, e.department_id,
+                    (SELECT e2.id FROM employees e2 JOIN users u2 ON u2.employee_id = e2.employee_id WHERE e2.section_id = e.section_id AND u2.role = 'section_head' LIMIT 1) as section_head_emp_id,
+                    (SELECT e3.id FROM employees e3 JOIN users u3 ON u3.employee_id = e3.employee_id WHERE e3.department_id = e.department_id AND u3.role = 'dept_head' LIMIT 1) as dept_head_emp_id
+                    FROM employees e WHERE e.id = ?";
+                $stmt = $conn->prepare($getManagersQuery);
+                $stmt->bind_param("i", $employeeId);
+                $stmt->execute();
+                $managersResult = $stmt->get_result();
+                $managers = $managersResult->fetch_assoc();
+                
+                $sectionHeadEmpId = $managers['section_head_emp_id'] ?? null;
+                $deptHeadEmpId = $managers['dept_head_emp_id'] ?? null;
+                
+                // Set initial status
+                $initialStatus = 'pending_section_head';
+                
+               // Check if applicant is a section head - then needs dept head approval
+            if (hasPermission('section_head')) {
+              $initialStatus = 'pending_dept_head';
+             }
+          
+             // Check if applicant is a dept head - then needs managing director approval
+             if (hasPermission('dept_head')) {
+              $initialStatus = 'pending_managing_director';
+          }
+          
+              // Check if applicant is managing director - then needs HR approval
+               if (hasPermission('managing_director')) {
+              $initialStatus = 'pending_hr_manager';
+              // For MD applications, we'll set both section_head and dept_head to null
+              $sectionHeadEmpId = null;
+              $deptHeadEmpId = null;
+               }
+
+                // Insert application with deduction details
+                $deductionDetails = json_encode($deductionPlan);
+                $stmt = $conn->prepare("INSERT INTO leave_applications
+                    (employee_id, leave_type_id, start_date, end_date, days_requested, reason,
+                     status, applied_at, section_head_emp_id, dept_head_emp_id, deduction_details,
+                     primary_days, annual_days, unpaid_days)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?)");
+                
+                // Count the number of parameters to bind
+                $params = [
+                    $employeeId, 
+                    $leaveTypeId, 
+                    $startDate, 
+                    $endDate,
+                    $days, 
+                    $reason, 
+                    $initialStatus,
+                    $sectionHeadEmpId,
+                    $deptHeadEmpId,
+                    $deductionDetails,
+                    $deductionPlan['primary_deduction'],
+                    $deductionPlan['annual_deduction'],
+                    $deductionPlan['unpaid_days']
+                ];
+                
+                // Create type string dynamically
+                $types = str_repeat('s', count($params));
+                
+                // Replace first 2 with 'i' for integer parameters
+                $types[0] = 'i';
+                $types[1] = 'i';
+                $types[7] = 'i'; // section_head_emp_id
+                $types[8] = 'i'; // dept_head_emp_id
+                $types[10] = 'i'; // primary_days
+                $types[11] = 'i'; // annual_days
+                $types[12] = 'i'; // unpaid_days
+                
+                $stmt->bind_param($types, ...$params);
+
+                if ($stmt->execute()) {
+                    $applicationId = $conn->insert_id;
                     
-                    $fallbackUsed = min($requestedDays - $remaining, $annualBalance['remaining']);
-                    $deductedFromAnnual = $fallbackUsed;
+                    // Log the transaction
+                    logLeaveTransaction($applicationId, $employeeId, $leaveTypeId, $days, $deductionPlan, $conn);
                     
-                    // Update annual leave balance
-                    updateLeaveBalance($application['employee_id'], $annualTypeId, $fallbackUsed, $conn, 'use');
+                    // Log to leave_history
+                    $historyStmt = $conn->prepare("INSERT INTO leave_history 
+                                                  (leave_application_id, action, performed_by, comments, performed_at) 
+                                                  VALUES (?, 'applied', ?, ?, NOW())");
+                    $comment = "Leave application submitted for $days days";
+                    $historyStmt->bind_param("iis", $applicationId, $user['id'], $comment);
+                    $historyStmt->execute();
+                    
+                    $conn->commit();
+                    $warningMessages = implode('<br>', $deductionPlan['warnings']);
+                    $success = "Leave application submitted successfully!<br><strong>Deduction Summary:</strong><br>" . $warningMessages;
                 } else {
-                    throw new Exception("Insufficient leave balance and no fallback available");
+                    $conn->rollback();
+                    $error = "Error submitting application: " . $conn->error;
                 }
+            } catch (Exception $e) {
+                $conn->rollback();
+                $error = "Database error: " . $e->getMessage();
             }
-    
-            // Update primary leave balance
-            $primaryUsed = min($requestedDays, $remaining);
-            updateLeaveBalance($application['employee_id'], $application['leave_type_id'], $primaryUsed, $conn, 'use');
-    
-            // Update application status
-            $stmt = $conn->prepare("UPDATE leave_applications 
-                                   SET status = ?, 
-                                       approver_id = ?, 
-                                       approver_comments = ?, 
-                                       approved_date = NOW(),
-                                       days_deducted = ?,
-                                       days_from_annual = ?
-                                   WHERE id = ?");
-            $stmt->bind_param("sisiiii", $newStatus, $user['id'], $approverComments, $requestedDays, $deductedFromAnnual, $applicationId);
-            $stmt->execute();
-    
-            // Log to leave_history
-            $comments = "Approved by " . $user['role'] . ". Deducted $primaryUsed days from " . $leaveType['name'];
-            if ($deductedFromAnnual > 0) {
-                $comments .= " and $deductedFromAnnual days from annual leave (fallback)";
-            }
+            break;
+
+        case 'approve_leave':
+            // First check if user has permission to approve this type of leave
+            $applicationId = (int)$_POST['application_id'];
+            $approverComments = sanitizeInput($_POST['approver_comments']);
             
-            $historyStmt = $conn->prepare("INSERT INTO leave_history 
-                                          (leave_application_id, action, performed_by, comments, performed_at) 
-                                          VALUES (?, 'approved', ?, ?, NOW())");
-            $historyStmt->bind_param("iss", $applicationId, $user['id'], $comments);
-            $historyStmt->execute();
-    
-            $conn->commit();
-            $success = "Leave application approved successfully!";
-        } catch (Exception $e) {
-            $conn->rollback();
-            $error = "Error approving leave: " . $e->getMessage();
-        }
-        break;
+            try {
+                $conn->begin_transaction();
+                
+                // Get application details and applicant info
+                $stmt = $conn->prepare("SELECT la.*, lt.*, e.id as emp_id, u.role as applicant_role,
+                                       u2.role as approver_role
+                                       FROM leave_applications la
+                                       JOIN leave_types lt ON la.leave_type_id = lt.id
+                                       JOIN employees e ON la.employee_id = e.id
+                                       JOIN users u ON u.employee_id = e.id
+                                       LEFT JOIN users u2 ON u2.id = ?
+                                       WHERE la.id = ?");
+                $stmt->bind_param("ii", $user['id'], $applicationId);
+                $stmt->execute();
+                $application = $stmt->get_result()->fetch_assoc();
+                
+                // Check if approver is trying to approve their own leave
+                if ($application['employee_id'] == $user['employee_id']) {
+                    throw new Exception("You cannot approve your own leave application");
+                }
+                
+                // Determine required approval based on current status and applicant's role
+                $canApprove = false;
+                $newStatus = 'approved'; // Default final status
+                
+                switch ($application['status']) {
+                    case 'pending_section_head':
+                        // Can be approved by section head or HR
+                        $canApprove = (hasPermission('section_head') && $user['employee_id'] == $application['section_head_emp_id']) 
+                                   || hasPermission('hr_manager');
+                        // If there's a dept head, move to next level, otherwise approve
+                        $newStatus = ($application['dept_head_emp_id'] ? 'pending_dept_head' : 'approved');
+                        break;
+                        
+                    case 'pending_dept_head':
+                        // Can be approved by dept head or HR
+                        $canApprove = (hasPermission('dept_head') && $user['employee_id'] == $application['dept_head_emp_id']) 
+                                   || hasPermission('hr_manager');
+                        $newStatus = 'approved';
+                        break;
+                        
+                    case 'pending_managing_director':
+                        // Can be approved by managing director or HR
+                        $canApprove = hasPermission('managing_director') || hasPermission('hr_manager');
+                        $newStatus = 'approved';
+                        break;
+                        
+                    case 'pending_hr_manager':
+                        // Only HR can approve managing director's leave
+                        $canApprove = hasPermission('hr_manager')|| hasPermission('managing_director');
+                        // If this is HR's approval, we finalize the application
+                        if (hasPermission('hr_manager')) {  
+                            $newStatus = 'approved';
+                        } else {
+                            // If managing director is approving, we can finalize
+                            $newStatus = 'approved';
+                        }
+                        break;
+                        $newStatus = 'approved';
+                        break;
+                        
+                    default:
+                        throw new Exception("This application is not in a state that can be approved");
+                }
+                
+                if (!$canApprove) {
+                    throw new Exception("You don't have permission to approve this leave application");
+                }
+                
+                // Get leave type details
+                $leaveType = $application;
+                $requestedDays = $application['days_requested'];
+        
+                // Get current balance for this leave type
+                $balance = getLeaveTypeBalance($application['employee_id'], $application['leave_type_id'], $conn);
+                $remaining = $balance['remaining'];
+        
+                // Check if deduction from annual leave is needed
+                $deductedFromAnnual = 0;
+                $fallbackUsed = 0;
+                
+                if ($remaining < $requestedDays) {
+                    if ($leaveType['deducted_from_annual'] == 1 && stripos($leaveType['name'], 'maternity') === false) {
+                        // Get annual leave balance
+                        $annualTypeId = getAnnualLeaveTypeId($conn);
+                        $annualBalance = getLeaveTypeBalance($application['employee_id'], $annualTypeId, $conn);
+                        
+                        $fallbackUsed = min($requestedDays - $remaining, $annualBalance['remaining']);
+                        $deductedFromAnnual = $fallbackUsed;
+                        
+                        // Update annual leave balance
+                        updateLeaveBalance($application['employee_id'], $annualTypeId, $fallbackUsed, $conn, 'use');
+                    } else {
+                        throw new Exception("Insufficient leave balance and no fallback available");
+                    }
+                }
+        
+                // Update primary leave balance
+                $primaryUsed = min($requestedDays, $remaining);
+                updateLeaveBalance($application['employee_id'], $application['leave_type_id'], $primaryUsed, $conn, 'use');
+        
+                // Update application status
+                $stmt = $conn->prepare("UPDATE leave_applications 
+                                       SET status = ?, 
+                                           approver_id = ?, 
+                                           approver_comments = ?, 
+                                           approved_date = NOW(),
+                                           days_deducted = ?,
+                                           days_from_annual = ?
+                                       WHERE id = ?");
+                $stmt->bind_param("sisiiii", $newStatus, $user['id'], $approverComments, $requestedDays, $deductedFromAnnual, $applicationId);
+                $stmt->execute();
+        
+                // Log to leave_history
+                $comments = "Approved by " . $user['role'] . ". Deducted $primaryUsed days from " . $leaveType['name'];
+                if ($deductedFromAnnual > 0) {
+                    $comments .= " and $deductedFromAnnual days from annual leave (fallback)";
+                }
+                
+                $historyStmt = $conn->prepare("INSERT INTO leave_history 
+                                              (leave_application_id, action, performed_by, comments, performed_at) 
+                                              VALUES (?, 'approved', ?, ?, NOW())");
+                $historyStmt->bind_param("iss", $applicationId, $user['id'], $comments);
+                $historyStmt->execute();
+        
+                $conn->commit();
+                $success = "Leave application approved successfully!";
+            } catch (Exception $e) {
+                $conn->rollback();
+                $error = "Error approving leave: " . $e->getMessage();
+            }
+            break;
 
         case 'reject_leave':
             $applicationId = (int)$_POST['application_id'];
@@ -1232,10 +1255,6 @@ try {
                                    LEFT JOIN departments d ON s.department_id = d.id ORDER BY s.name");
     $sections = $sectionsResult->fetch_all(MYSQLI_ASSOC);
 
-    // Get leave types with enhanced details
-    $leaveTypesResult = $conn->query("SELECT * FROM leave_types WHERE is_active = 1 ORDER BY name");
-    $leaveTypes = $leaveTypesResult->fetch_all(MYSQLI_ASSOC);
-
     // Get employees (for managers)
     if (in_array($user['role'], ['hr_manager', 'dept_head', 'section_head'])) {
         $employeesQuery = "SELECT e.*, d.name as department_name, s.name as section_name 
@@ -1286,18 +1305,25 @@ try {
         }
     }
 
-    // Get leave balances for current user with leave type details
-    if ($userEmployee) {
-        $stmt = $conn->prepare("SELECT lb.*, lt.name as leave_type_name, lt.max_days_per_year, lt.counts_weekends,
-                               lt.deducted_from_annual
-                               FROM leave_balances lb
-                               JOIN leave_types lt ON lb.leave_type_id = lt.id
-                               WHERE lb.employee_id = ? AND lt.is_active = 1
-                               ORDER BY lt.name");
-        $stmt->bind_param("i", $userEmployee['id']);
-        $stmt->execute();
-        $leaveBalances = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    }
+    // Get leave balances for current user with leave type details - only latest financial year
+if ($userEmployee) {
+    // First get the latest financial_year_id
+    $latestYearQuery = "SELECT MAX(financial_year_id) as latest_year FROM employee_leave_balances";
+    $latestYearResult = $conn->query($latestYearQuery);
+    $latestYear = $latestYearResult->fetch_assoc()['latest_year'];
+    
+    $stmt = $conn->prepare("SELECT elb.*, lt.name as leave_type_name, lt.max_days_per_year, lt.counts_weekends,
+                           lt.deducted_from_annual
+                           FROM employee_leave_balances elb
+                           JOIN leave_types lt ON elb.leave_type_id = lt.id
+                           WHERE elb.employee_id = ? 
+                           AND elb.financial_year_id = ?
+                           AND lt.is_active = 1
+                           ORDER BY lt.name");
+    $stmt->bind_param("ii", $userEmployee['id'], $latestYear);
+    $stmt->execute();
+    $leaveBalances = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
 
     // Populate management tabs with enhanced data
     if ($tab === 'manage' && in_array($user['role'], ['hr_manager', 'dept_head', 'section_head', 'manager', 'managing_director'])) {
@@ -1531,24 +1557,30 @@ try {
                         <label for="leave_type_id">Leave Type</label>
                         <select name="leave_type_id" id="leave_type_id" class="form-control" required>
                             <option value="">Select Leave Type</option>
-                            <?php foreach ($leaveTypes as $type): ?>
-                            <option value="<?php echo $type['id']; ?>" 
-                                    data-max-days="<?php echo $type['max_days_per_year']; ?>"
-                                    data-counts-weekends="<?php echo $type['counts_weekends']; ?>"
-                                    data-fallback="<?php echo $type['deducted_from_annual']; ?>">
-                                <?php echo htmlspecialchars($type['name']); ?>
-                                <?php if ($type['max_days_per_year']): ?>
-                                (Max: <?php echo $type['max_days_per_year']; ?> days/year)
-                                <?php endif; ?>
-                            </option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($leaveTypes)): ?>
+                                <?php foreach ($leaveTypes as $type): ?>
+                                <option value="<?php echo $type['id']; ?>" 
+                                        data-max-days="<?php echo $type['max_days_per_year']; ?>"
+                                        data-counts-weekends="<?php echo $type['counts_weekends']; ?>"
+                                        data-fallback="<?php echo $type['deducted_from_annual']; ?>">
+                                    <?php echo htmlspecialchars($type['name']); ?>
+                                    <?php if ($type['max_days_per_year']): ?>
+                                    (Max: <?php echo $type['max_days_per_year']; ?> days/year)
+                                    <?php endif; ?>
+                                </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </select>
+                        <?php if (empty($leaveTypes)): ?>
+                        <small class="text-danger">No leave types allocated to you. Please contact HR.</small>
+                        <?php endif; ?>
                     </div>
 
                     <div class="form-group">
                         <label for="start_date">Start Date</label>
                         <input type="date" name="start_date" id="start_date" class="form-control" required>
                     </div>
+
                 </div>
 
                 <div class="form-grid">
@@ -1995,94 +2027,83 @@ try {
                     </div>
 
                     <!-- Enhanced Leave Balance Display -->
-                    <div class="leave-balance-section mb-4">
-                        <h4>Detailed Leave Balance (Current Year)</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
-                            <?php foreach ($leaveBalances as $balance): ?>
-                            <div class="leave-balance-card">
-                                <div class="balance-header">
-                                    <?php echo htmlspecialchars($balance['leave_type_name']); ?>
-                                    <?php if ($balance['max_days_per_year']): ?>
-                                    <span style="font-size: 12px; color: #6c757d;">(Max: <?php echo $balance['max_days_per_year']; ?>/year)</span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="balance-details">
-                                    <div class="balance-item balance-allocated">
-                                        <div>Allocated</div>
-                                        <strong><?php echo $balance['annual_leave_entitled']; ?> days</strong>
-                                    </div>
-                                    <div class="balance-item balance-used">
-                                        <div>Used</div>
-                                        <strong><?php echo $balance['annual_leave_used']; ?> days</strong>
-                                    </div>
-                                    <div class="balance-item <?php echo $balance['annual_leave_balance'] < 0 ? 'balance-negative' : 'balance-remaining'; ?>">
-                                        <div>Remaining</div>
-                                        <strong><?php echo $balance['annual_leave_balance']; ?> days</strong>
-                                    </div>
-                                </div>
-                                <div style="margin-top: 10px; font-size: 12px;">
-                                    <?php if ($balance['counts_weekends'] == 0): ?>
-                                    <div class="info-text">Working days only (excludes weekends)</div>
-                                    <?php else: ?>
-                                    <div class="info-text">Includes weekends</div>
-                                    <?php endif; ?>
-                                    
-                                    <?php if ($balance['deducted_from_annual']): ?>
-                                    <div class="info-text">Falls back to Annual Leave when exhausted</div>
-                                    <?php endif; ?>
-                                    
-                                    <?php if ($balance['annual_leave_balance'] < 0): ?>
-                                    <div class="unpaid-warning">Negative balance - previous leave was unpaid</div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <!-- Leave Balance Overview -->
-         <div class="leave-balance-overview mb-4">
-    <h4>Your Leave Balance Overview</h4>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
-        <?php if (!empty($leaveBalances)): ?>
-            <?php foreach ($leaveBalances as $balance): ?>
-            <div class="leave-balance-card">
-                <div class="balance-header"><?php echo htmlspecialchars($balance['leave_type_name'] ?? 'Unknown Leave Type'); ?></div>
-                <div class="balance-details">
-                    <div class="balance-item balance-allocated">
-                        <div>Allocated</div>
-                        <strong><?php echo intval($balance['allocated'] ?? 0); ?></strong>
-                    </div>
-                    <div class="balance-item balance-used">
-                        <div>Used</div>
-                        <strong><?php echo intval($balance['used'] ?? 0); ?></strong>
-                    </div>
-                    <div class="balance-item <?php echo (intval($balance['remaining'] ?? 0) < 0) ? 'balance-negative' : 'balance-remaining'; ?>">
-                        <div>Remaining</div>
-                        <strong><?php echo intval($balance['remaining'] ?? 0); ?></strong>
-                    </div>
-                </div>
-                <?php if (isset($balance['max_days_per_year']) && $balance['max_days_per_year']): ?>
-                <div class="info-text" style="margin-top: 8px; font-size: 12px;">
-                    Max per year: <?php echo intval($balance['max_days_per_year']); ?> days
-                    <?php if (isset($balance['deducted_from_annual']) && $balance['deducted_from_annual']): ?>
-                    | Fallback to Annual Leave
-                    <?php endif; ?>
-                </div>
-                <?php endif; ?>
-            </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="alert alert-info">
-                <p>No leave balance information available. This might be because:</p>
-                <ul>
-                    <li>Your employee record is not properly set up</li>
-                    <li>No leave types have been configured</li>
-                    <li>Leave balances haven't been initialized for this year</li>
-                </ul>
-                <p>Please contact HR for assistance.</p>
-            </div>
+                   <!-- Enhanced Leave Balance Display -->
+<!-- Enhanced Leave Balance Display -->
+<div class="leave-balance-section mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Leave Balances</h4>
+        <?php if (isset($latestYear)): ?>
+        <span class="badge badge-info">Financial Year ID: <?php echo $latestYear; ?></span>
         <?php endif; ?>
     </div>
+    
+    <?php if (empty($leaveBalances)): ?>
+        <div class="alert alert-info">No leave balances found for the current financial year.</div>
+    <?php else: ?>
+        <div class="row">
+            <?php foreach ($leaveBalances as $balance): ?>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0"><?php echo htmlspecialchars($balance['leave_type_name']); ?></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress mb-3" style="height: 20px;">
+                            <?php 
+                            $percentage = ($balance['used_days'] / $balance['allocated_days']) * 100;
+                            $progressClass = $percentage > 80 ? 'bg-danger' : ($percentage > 50 ? 'bg-warning' : 'bg-success');
+                            ?>
+                            <div class="progress-bar <?php echo $progressClass; ?>" 
+                                 role="progressbar" 
+                                 style="width: <?php echo $percentage; ?>%" 
+                                 aria-valuenow="<?php echo $percentage; ?>" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                <?php echo round($percentage, 1); ?>%
+                            </div>
+                        </div>
+                        
+                        <div class="balance-details">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Allocated:</span>
+                                <strong><?php echo $balance['allocated_days']; ?> days</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Used:</span>
+                                <strong><?php echo $balance['used_days']; ?> days</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Remaining:</span>
+                                <strong class="<?php echo $balance['remaining_days'] < 0 ? 'text-danger' : 'text-success'; ?>">
+                                    <?php echo $balance['remaining_days']; ?> days
+                                </strong>
+                            </div>
+                            <?php if ($balance['total_days']): ?>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total Entitlement:</span>
+                                <strong><?php echo $balance['total_days']; ?> days</strong>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light">
+                        <small class="text-muted">
+                            <?php if ($balance['counts_weekends'] == 0): ?>
+                            <i class="fas fa-calendar-week"></i> Excludes weekends
+                            <?php else: ?>
+                            <i class="fas fa-calendar-alt"></i> Includes weekends
+                            <?php endif; ?>
+                            
+                            <?php if ($balance['deducted_from_annual']): ?>
+                            <span class="ml-2"><i class="fas fa-exchange-alt"></i> Falls back to Annual Leave</span>
+                            <?php endif; ?>
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 </div>
                     <!-- Enhanced Leave History -->
                     <div class="table-container">
