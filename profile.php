@@ -1,4 +1,3 @@
-
 <?php
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -14,7 +13,7 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
-
+require_once 'header.php';
 require_once 'config.php';
 $conn = getConnection();
 
@@ -93,8 +92,7 @@ if ($userEmployee) {
     $employee = $userEmployee;
 
     // Get leave balances for current user with leave type details - only latest financial year
-    // First get the latest financial_year_id
-    $latestYearQuery = "SELECT MAX(financial_year_id) as latest_year FROM employee_leave_balances";
+    $latestYearQuery = "SELECT MAX(year_name) as latest_year FROM  financial_years";
     $latestYearResult = $conn->query($latestYearQuery);
     $latestYear = $latestYearResult->fetch_assoc()['latest_year'];
 
@@ -126,16 +124,307 @@ if ($userEmployee) {
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?php echo $_SESSION['theme'] ?? 'light'; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Leave Profile - HR Management System</title>
     <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* Ensure body adapts to theme */
+        body {
+            font-family: 'Arial', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        :root[data-theme="light"] body {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
+        }
+
+        :root[data-theme="dark"] body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 50%, #3d3d3d 100%);
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        :root[data-theme="light"] body::before {
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 123, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(111, 66, 193, 0.03) 0%, transparent 50%);
+        }
+
+        :root[data-theme="dark"] body::before {
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 123, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(111, 66, 193, 0.1) 0%, transparent 50%);
+        }
+
+        /* Container and Main Content */
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: var(--bg-secondary);
+            padding: 1rem;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            padding: 2rem;
+            background: var(--bg-primary);
+        }
+
+        /* Leave Tabs */
+        .leave-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .leave-tab {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .leave-tab:hover {
+            background: var(--bg-glass);
+            color: var(--text-primary);
+        }
+
+        .leave-tab.active {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        /* My Leave Profile Tab Styling */
+        .tab-content {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            backdrop-filter: blur(5px);
+        }
+
+        .tab-content h3 {
+            margin-top: 0;
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-accent);
+            padding-bottom: 0.5rem;
+        }
+
+        /* Employee Information */
+        .employee-info {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .employee-info h4 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .employee-info p {
+            margin: 0.5rem 0;
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .employee-info p strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Leave Balance Section */
+        .leave-balance-section {
+            padding: 1rem;
+        }
+
+        .leave-balance-section h4 {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+        }
+        
+        .leave-balance-section span{
+            font-size: 2rem;
+            color: var(--text-primary);
+        }
+
+
+        .leave-balance-section .badge-info {
+            background: var(--info-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+        }
+
+        .alert.alert-info {
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            border: 1px solid var(--info-color);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin: 0 -15px;
+        }
+
+        .col-md-4 {
+            flex: 0 0 33.3333%;
+            max-width: 33.3333%;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            padding: 0.75rem 1rem;
+            background: var(--primary-color);
+            color: white;
+            border-bottom: none;
+        }
+
+        .card-header h5 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .card-body {
+            padding: 1rem;
+        }
+
+        .progress {
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            transition: width 0.6s ease;
+        }
+
+        .progress-bar.bg-success {
+            background: var(--success-color);
+        }
+
+        .progress-bar.bg-warning {
+            background: var(--warning-color);
+        }
+
+        .progress-bar.bg-danger {
+            background: var(--error-color);
+        }
+
+        .balance-details {
+            font-size: 0.9rem;
+        }
+
+        .balance-details .d-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .balance-details span {
+            color: var(--text-secondary);
+        }
+
+        .balance-details strong {
+            color: var(--text-primary);
+        }
+
+        .balance-details .text-danger {
+            color: var(--error-color);
+        }
+
+        .balance-details .text-success {
+            color: var(--success-color);
+        }
+
+        .card-footer {
+            background: var(--bg-secondary);
+            padding: 0.75rem 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .card-footer .text-muted {
+            color: var(--text-muted);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .col-md-4 {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-brand">
                 <h1>HR System</h1>
@@ -143,48 +432,54 @@ if ($userEmployee) {
             </div>
             <nav class="nav">
                 <ul>
-                    <li><a href="dashboard.php" class="active">Dashboard</a></li>
-                    <li><a href="employees.php">Employees</a></li>
+                    <li><a href="dashboard.php" class="active">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a></li>
+                    <li><a href="employees.php">
+                        <i class="fas fa-users"></i> Employees
+                    </a></li>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="departments.php">Departments</a></li>
+                    <li><a href="departments.php">
+                        <i class="fas fa-building"></i> Departments
+                    </a></li>
                     <?php endif; ?>
                     <?php if (hasPermission('super_admin')): ?>
-                   <li><a href="admin.php?tab=users">Admin</a></li>
-                   <?php elseif (hasPermission('hr_manager')): ?>
-                  <li><a href="admin.php?tab=financial">Admin</a></li>
-                   <?php endif; ?>
+                    <li><a href="admin.php?tab=users">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php elseif (hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php?tab=financial">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php endif; ?>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="reports.php">Reports</a></li>
+                    <li><a href="reports.php">
+                        <i class="fas fa-chart-bar"></i> Reports
+                    </a></li>
                     <?php endif; ?>
-                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')||hasPermission('dept_head')||hasPermission('officer')): ?>
-                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php if (hasPermission('hr_manager') || hasPermission('super_admin') || hasPermission('dept_head') || hasPermission('officer')): ?>
+                    <li><a href="leave_management.php">
+                        <i class="fas fa-calendar-alt"></i> Leave Management
+                    </a></li>
                     <?php endif; ?>
-                    <li><a href="employee_appraisal.php">Performance Appraisal</a></li>
-                    <li><a href="payroll_mnagements.php" ><i class="fas fa-money-check"></i> Payroll</a></li>
+                    <li><a href="employee_appraisal.php">
+                        <i class="fas fa-star"></i> Performance Appraisal
+                    </a></li>
+                    <li><a href="payroll_management.php">
+                        <i class="fas fa-money-check"></i> Payroll
+                    </a></li>
                 </ul>
             </nav>
         </div>
-        </div>
-
-        <!-- Main Content -->
+        
         <div class="main-content">
-            <!-- Header -->
-            <div class="header">
-                <h1>My Leave Profile</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
-                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
-                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
-                </div>
-            </div>
-
             <div class="content">
                 <div class="leave-tabs">
                     <a href="leave_management.php" class="leave-tab">Apply Leave</a>
                     <?php if (in_array($user['role'], ['hr_manager', 'dept_head', 'section_head', 'manager', 'managing_director','super_admin'])): ?>
                     <a href="manage.php" class="leave-tab">Manage Leave</a>
                     <?php endif; ?>
-                    <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing director'])): ?>
+                    <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing_director'])): ?>
                     <a href="history.php" class="leave-tab">Leave History</a>
                     <a href="holidays.php" class="leave-tab">Holidays</a>
                     <?php endif; ?>

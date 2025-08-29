@@ -7,6 +7,7 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 require_once 'config.php';
+require_once 'header.php';
 
 // Initialize $tab with default value BEFORE any output
 $tab = isset($_GET['tab']) ? sanitizeInput($_GET['tab']) : 'users';
@@ -624,40 +625,57 @@ function getRoleBadge($role) {
             </div>
             <nav class="nav">
                 <ul>
-                    <li><a href="dashboard.php">Dashboard</a></li>
-                    <li><a href="employees.php">Employees</a></li>
+                    <li><a href="dashboard.php" class="active">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a></li>
+                    <li><a href="employees.php">
+                        <i class="fas fa-users"></i> Employees
+                    </a></li>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="departments.php">Departments</a></li>
+                    <li><a href="departments.php">
+                        <i class="fas fa-building"></i> Departments
+                    </a></li>
                     <?php endif; ?>
-                    <?php if (hasPermission('super_admin') || hasPermission('hr_manager')): ?>
-                    <li><a href="admin.php" class="active">Admin</a></li>
+                    <?php if (hasPermission('super_admin')): ?>
+                    <li><a href="admin.php?tab=users">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php elseif (hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php?tab=financial">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
                     <?php endif; ?>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="reports.php">Reports</a></li>
+                    <li><a href="reports.php">
+                        <i class="fas fa-chart-bar"></i> Reports
+                    </a></li>
                     <?php endif; ?>
-                    <?php if (hasPermission('hr_manager') || hasPermission('super_admin') || hasPermission('dept_head')): ?>
-                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php if (hasPermission('hr_manager') || hasPermission('super_admin') || hasPermission('dept_head') || hasPermission('officer')): ?>
+                    <li><a href="leave_management.php">
+                        <i class="fas fa-calendar-alt"></i> Leave Management
+                    </a></li>
                     <?php endif; ?>
+                    <li><a href="employee_appraisal.php">
+                        <i class="fas fa-star"></i> Performance Appraisal
+                    </a></li>
+                    <li><a href="payroll_managements.php">
+                        <i class="fas fa-money-check"></i> Payroll
+                    </a></li>
                 </ul>
             </nav>
         </div>
-
+        
+        <!-- Main Content Area -->
         <div class="main-content">
-            <div class="header">
-                <h1>Admin Panel</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
-                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
-                    <a href="logout.php" class="btn btn-secondary">Logout</a>
-                </div>
-            </div>
             
+            <!-- Content -->
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type']; ?>">
                         <?php echo htmlspecialchars($flash['message']); ?>
                     </div>
                 <?php endif; ?>
+                
                 
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>

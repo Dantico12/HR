@@ -13,7 +13,7 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
-
+require_once 'sidebar.php';
 require_once 'config.php';
 $conn = getConnection();
 
@@ -1511,17 +1511,6 @@ if ($userEmployee) {
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Header -->
-            <div class="header">
-                <h1>Enhanced Leave Management System</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
-                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
-                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
-                </div>
-            </div>
 
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>

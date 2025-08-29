@@ -13,7 +13,7 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
-
+require_once 'header.php';
 require_once 'config.php';
 $conn = getConnection();
 
@@ -673,48 +673,61 @@ $conn->close();
             </div>
             <nav class="nav">
                 <ul>
-                    <li><a href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></li>
-                    <li><a href="employees.php"><i class="fas fa-users"></i> Employees</a></li>
+                    <li><a href="dashboard.php" class="active">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a></li>
+                    <li><a href="employees.php">
+                        <i class="fas fa-users"></i> Employees
+                    </a></li>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="departments.php"><i class="fas fa-building"></i> Departments</a></li>
+                    <li><a href="departments.php">
+                        <i class="fas fa-building"></i> Departments
+                    </a></li>
                     <?php endif; ?>
                     <?php if (hasPermission('super_admin')): ?>
-                   <li><a href="admin.php?tab=users"><i class="fas fa-cog"></i> Admin</a></li>
-                   <?php elseif (hasPermission('hr_manager')): ?>
-                  <li><a href="admin.php?tab=financial"><i class="fas fa-cog"></i> Admin</a></li>
-                   <?php endif; ?>
+                    <li><a href="admin.php?tab=users">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php elseif (hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php?tab=financial">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php endif; ?>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="reports.php"><i class="fas fa-chart-bar"></i> Reports</a></li>
+                    <li><a href="reports.php">
+                        <i class="fas fa-chart-bar"></i> Reports
+                    </a></li>
                     <?php endif; ?>
                     <?php if (hasPermission('hr_manager') || hasPermission('super_admin') || hasPermission('dept_head') || hasPermission('officer')): ?>
-                    <li><a href="leave_management.php"><i class="fas fa-calendar-alt"></i> Leave Management</a></li>
+                    <li><a href="leave_management.php">
+                        <i class="fas fa-calendar-alt"></i> Leave Management
+                    </a></li>
                     <?php endif; ?>
-                    <li><a href="employee_appraisal.php" class="active"><i class="fas fa-chart-line"></i> Performance Appraisal</a></li>
-                    <li><a href="payroll_management.php" ><i class="fas fa-money-check"></i> Payroll</a></li>
+                    <li><a href="employee_appraisal.php">
+                        <i class="fas fa-star"></i> Performance Appraisal
+                    </a></li>
+                    <li><a href="payroll_management.php">
+                        <i class="fas fa-money-check"></i> Payroll
+                    </a></li>
                 </ul>
             </nav>
         </div>
-
-        <!-- Main Content -->
+        
+        <!-- Main Content Area -->
         <div class="main-content">
-            <div class="header">
-                <button class="sidebar-toggle">☰</button>
-                <h1>Performance Appraisal</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
-                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
-                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
-                </div>
-            </div>
             
+            <!-- Content -->
             <div class="content">
-                <?php if (isset($_SESSION['flash_message'])): ?>
-                    <div class="alert alert-<?php echo $_SESSION['flash_type']; ?>">
-                        <?php echo htmlspecialchars($_SESSION['flash_message']); ?>
-                    </div>
-                    <?php unset($_SESSION['flash_message'], $_SESSION['flash_type']); ?>
-                <?php endif; ?>
-
+                <?php if (isset($_SESSION['flash_message']) && isset($_SESSION['flash_type'])): ?>
+    <div class="alert alert-<?php echo htmlspecialchars($_SESSION['flash_type']); ?>">
+        <?php echo htmlspecialchars($_SESSION['flash_message']); ?>
+        <?php
+        // Clear flash message after displaying
+        unset($_SESSION['flash_message']);
+        unset($_SESSION['flash_type']);
+        ?>
+    </div>
+<?php endif; ?>
                 <div class="leave-tabs">
                     <a href="employee_appraisal.php" class="leave-tab">Employee Appraisal</a>
                     <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing_director', 'section_head', 'dept_head'])): ?>

@@ -1,31 +1,4 @@
--- phpMyAdmin SQL Dump
--- version 5.2.1
--- https://www.phpmyadmin.net/
---
--- Host: 127.0.0.1
--- Generation Time: Aug 26, 2025 at 08:16 AM
--- Server version: 10.4.32-MariaDB
--- PHP Version: 8.2.12
-
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-START TRANSACTION;
-SET time_zone = "+00:00";
-
-
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8mb4 */;
-
---
--- Database: `hr31`
---
-
--- --------------------------------------------------------
-
---
--- Table structure for table `allowance_types`
---
+a
 
 CREATE TABLE `allowance_types` (
   `id` int(11) NOT NULL,
@@ -43,7 +16,7 @@ CREATE TABLE `allowance_types` (
 
 INSERT INTO `allowance_types` (`id`, `name`, `description`, `calculation_type`, `is_taxable`, `is_active`, `created_at`) VALUES
 (1, 'House Allowance', 'Housing allowance for employees', 'fixed', 1, 1, '2025-08-17 17:54:44'),
-(2, 'Transport Allowance', 'Transportation allowance', 'fixed', 1, 1, '2025-08-17 17:54:44'),
+(2, 'Transport Allowance', 'aTransportation allowance', 'fixed', 1, 1, '2025-08-17 17:54:44'),
 (3, 'Medical Allowance', 'Medical and healthcare allowance', 'fixed', 0, 1, '2025-08-17 17:54:44'),
 (4, 'Overtime Pay', 'Overtime compensation', 'formula', 1, 1, '2025-08-17 17:54:44'),
 (5, 'Commission', 'Sales commission', 'percentage', 1, 1, '2025-08-17 17:54:44'),

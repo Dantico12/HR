@@ -8,6 +8,7 @@ if (session_status() == PHP_SESSION_NONE) {
 }
 require_once 'config.php';
 
+
 // Get database connection
 $conn = getConnection();
 
@@ -447,6 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+include 'header.php';
 ?>
 
 
@@ -458,24 +460,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Profile - HR Management System</title>
     <link rel="stylesheet" href="style.css">
     <style>
-   /* Global container styling */
+        /* Replace the entire <style> section in employees.php with this */
+<style>
+/* Global container styling - uses theme variables */
 .container {
     display: flex;
     min-height: 100vh;
-    background: linear-gradient(135deg, #0a0f1e 0%, #1a2238 100%);
-    color: #e0e6ff;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     overflow: hidden;
 }
 
-/* Sidebar styling */
+/* Sidebar styling - uses theme variables */
 .sidebar {
     width: 280px;
-    background: linear-gradient(to bottom, #0d1326, #1a2238);
-    border-right: 1px solid #2a3a55;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
     padding: 20px;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-    transition: transform 0.3s ease;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
 }
 
 .sidebar-brand {
@@ -485,7 +489,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 .sidebar-brand h1 {
     font-size: 1.8rem;
-    color: #00d1ff;
+    color: var(--primary-color);
     margin: 0;
     font-weight: 700;
     text-transform: uppercase;
@@ -493,7 +497,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 .sidebar-brand p {
-    color: #a0aec0;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     margin: 5px 0 0;
 }
@@ -506,7 +510,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .nav ul li a {
     display: block;
     padding: 12px 20px;
-    color: #a0aec0;
+    color: var(--text-secondary);
     text-decoration: none;
     font-size: 1rem;
     border-radius: 8px;
@@ -515,13 +519,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 .nav ul li a:hover {
-    background: rgba(0, 209, 255, 0.1);
-    color: #00d1ff;
+    background: var(--bg-glass);
+    color: var(--primary-color);
 }
 
 .nav ul li a.active {
-    background: #00d1ff;
-    color: #0a0a0a;
+    background: var(--primary-color);
+    color: var(--bg-secondary);
     font-weight: 600;
 }
 
@@ -529,7 +533,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .main-content {
     flex: 1;
     padding: 30px;
-    background: #141b2d;
+    background: var(--bg-secondary);
     overflow-y: auto;
 }
 
@@ -539,12 +543,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     align-items: center;
     margin-bottom: 30px;
     padding-bottom: 15px;
-    border-bottom: 1px solid #2a3a55;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .header h1 {
     font-size: 2rem;
-    color: #00d1ff;
+    color: var(--primary-color);
     margin: 0;
     font-weight: 700;
 }
@@ -567,8 +571,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     display: flex;
     margin: 0;
     padding: 0;
-    border-bottom: 2px solid #00d1ff;
-    background: #1a2238;
+    border-bottom: 2px solid var(--primary-color);
+    background: var(--bg-tertiary);
     border-radius: 8px 8px 0 0;
 }
 
@@ -576,8 +580,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     display: block;
     padding: 12px 25px;
     text-decoration: none;
-    color: #a0aec0;
-    background: #1f2a40;
+    color: var(--text-secondary);
+    background: var(--bg-card);
     margin-right: 5px;
     border-radius: 8px 8px 0 0;
     font-weight: 500;
@@ -585,22 +589,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 .tabs ul li a:hover {
-    background: #2a3a55;
-    color: #00d1ff;
+    background: var(--bg-glass);
+    color: var(--primary-color);
 }
 
 .tabs ul li a.active {
-    background: #00d1ff;
-    color: #0a0a0a;
+    background: var(--primary-color);
+    color: var(--bg-secondary);
     font-weight: 600;
 }
 
 .tab-content {
     display: none;
     padding: 25px;
-    background: #1f2a40;
+    background: var(--bg-card);
     border-radius: 0 8px 8px 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-md);
 }
 
 .tab-content.active {
@@ -611,22 +615,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .document-container {
     max-width: 900px;
     margin: 0 auto;
-    background: #212b45;
+    background: var(--bg-modal);
     padding: 40px;
-    border: 1px solid #2d3e5e;
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 209, 255, 0.1);
+    box-shadow: var(--shadow-lg);
 }
 
 .document-header {
     text-align: center;
     margin-bottom: 40px;
     padding-bottom: 15px;
-    border-bottom: 2px solid #00d1ff;
+    border-bottom: 2px solid var(--primary-color);
 }
 
 .document-header h2 {
-    color: #00d1ff;
+    color: var(--primary-color);
     font-size: 1.8rem;
     font-weight: 700;
     margin: 0;
@@ -641,22 +645,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 .document-content .label {
     font-weight: 600;
-    color: #e0e6ff;
+    color: var(--text-primary);
 }
 
 .document-content .value {
-    color: #a0aec0;
+    color: var(--text-secondary);
 }
 
 /* Form styling */
 .password-form {
     margin-top: 40px;
     padding-top: 25px;
-    border-top: 1px solid #2a3a55;
+    border-top: 1px solid var(--border-color);
 }
 
 .password-form h3 {
-    color: #00d1ff;
+    color: var(--primary-color);
     font-size: 1.5rem;
     margin-bottom: 25px;
 }
@@ -668,9 +672,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .form-control {
     width: 100%;
     padding: 10px;
-    background: #283347;
-    border: 1px solid #3c4c69;
-    color: #e0e6ff;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
     border-radius: 6px;
     font-size: 1rem;
     transition: border-color 0.3s ease;
@@ -678,34 +682,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 .form-control:focus {
     outline: none;
-    border-color: #00d1ff;
-    box-shadow: 0 0 8px rgba(0, 209, 255, 0.3);
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-glow);
 }
 
 /* Button styling */
 .btn-primary {
-    background: #00d1ff;
+    background: var(--primary-color);
     border: none;
     padding: 10px 20px;
-    color: #0a0a0a;
+    color: var(--bg-secondary);
     border-radius: 6px;
     font-weight: 600;
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .btn-primary:hover {
-    background: #00b8e6;
-    box-shadow: 0 4px 12px rgba(0, 209, 255, 0.3);
+    background: var(--primary-dark);
+    box-shadow: var(--shadow-glow);
 }
 
 .btn-success {
-    background: #28a745;
+    background: var(--success-color);
     border: none;
     padding: 10px 20px;
     color: #ffffff;
     border-radius: 6px;
     font-weight: 600;
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .btn-success:hover {
@@ -721,11 +727,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     border-radius: 6px;
     font-weight: 600;
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .btn-secondary:hover {
     background: #5a6268;
     box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 0.875rem;
 }
 
 /* Alert styling */
@@ -738,14 +750,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 .alert-success {
     background: rgba(40, 167, 69, 0.15);
-    color: #28a745;
-    border: 1px solid #28a745;
+    color: var(--success-color);
+    border: 1px solid var(--success-color);
 }
 
 .alert-danger {
     background: rgba(220, 53, 69, 0.15);
-    color: #dc3545;
-    border: 1px solid #dc3545;
+    color: var(--error-color);
+    border: 1px solid var(--error-color);
 }
 
 /* Table styling */
@@ -758,28 +770,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    color: #e0e6ff;
-    background: #212b45;
+    color: var(--text-primary);
+    background: var(--bg-modal);
     border-radius: 8px;
     overflow: hidden;
 }
 
 .table th, .table td {
     padding: 12px;
-    border: 1px solid #2d3e5e;
+    border: 1px solid var(--border-color);
     text-align: left;
 }
 
 .table th {
-    background: #00d1ff;
-    color: #0a0a0a;
+    background: var(--primary-color);
+    color: var(--bg-secondary);
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.9rem;
 }
 
 .table td {
-    background: #1f2a40;
+    background: var(--bg-card);
+}
+
+.text-center {
+    text-align: center;
 }
 
 /* Badge styling */
@@ -793,12 +809,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 .badge-primary {
-    background: #00d1ff;
-    color: #0a0a0a;
+    background: var(--primary-color);
+    color: var(--bg-secondary);
 }
 
 .badge-success {
-    background: #28a745;
+    background: var(--success-color);
     color: #ffffff;
 }
 
@@ -808,18 +824,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 .badge-warning {
-    background: #ffc107;
+    background: var(--warning-color);
     color: #212529;
 }
 
 .badge-danger {
-    background: #dc3545;
+    background: var(--error-color);
     color: #ffffff;
 }
 
 .badge-secondary {
     background: #6c757d;
     color: #ffffff;
+}
+
+.badge-light {
+    background: var(--text-secondary);
+    color: var(--bg-secondary);
 }
 
 /* Modal styling */
@@ -836,15 +857,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 .modal-content {
-    background: #212b45;
+    background: var(--bg-modal);
     margin: 5% auto;
     padding: 30px;
     border-radius: 12px;
     max-width: 700px;
     width: 90%;
-    color: #e0e6ff;
-    border: 1px solid #2d3e5e;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -857,18 +878,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 .modal-header h3 {
     margin: 0;
     font-size: 1.6rem;
-    color: #00d1ff;
+    color: var(--primary-color);
 }
 
 .close {
     cursor: pointer;
     font-size: 28px;
-    color: #ffffff;
+    color: var(--text-primary);
     transition: color 0.3s ease;
 }
 
 .close:hover {
-    color: #00d1ff;
+    color: var(--primary-color);
 }
 
 .form-row {
@@ -908,7 +929,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         height: 100%;
     }
 
-    .sidebar.active {
+    .sidebar.mobile-open {
         transform: translateX(0);
     }
 
@@ -925,7 +946,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         gap: 15px;
     }
 }
-}
+</style>
 </style>
 </head>
 <body>
@@ -936,48 +957,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <h1>HR System</h1>
                 <p>Management Portal</p>
             </div>
-             <nav class="nav">
+            <nav class="nav">
                 <ul>
-                    <li><a href="dashboard.php" class="active">Dashboard</a></li>
-                    <li><a href="employees.php">Employees</a></li>
+                    <li><a href="dashboard.php" class="active">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a></li>
+                    <li><a href="employees.php">
+                        <i class="fas fa-users"></i> Employees
+                    </a></li>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="departments.php">Departments</a></li>
+                    <li><a href="departments.php">
+                        <i class="fas fa-building"></i> Departments
+                    </a></li>
                     <?php endif; ?>
                     <?php if (hasPermission('super_admin')): ?>
-                   <li><a href="admin.php?tab=users">Admin</a></li>
-                   <?php elseif (hasPermission('hr_manager')): ?>
-                  <li><a href="admin.php?tab=financial">Admin</a></li>
-                   <?php endif; ?>
+                    <li><a href="admin.php?tab=users">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php elseif (hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php?tab=financial">
+                        <i class="fas fa-cog"></i> Admin
+                    </a></li>
+                    <?php endif; ?>
                     <?php if (hasPermission('hr_manager')): ?>
-                    <li><a href="reports.php">Reports</a></li>
+                    <li><a href="reports.php">
+                        <i class="fas fa-chart-bar"></i> Reports
+                    </a></li>
                     <?php endif; ?>
-                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')||hasPermission('dept_head')||hasPermission('officer')): ?>
-                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php if (hasPermission('hr_manager') || hasPermission('super_admin') || hasPermission('dept_head') || hasPermission('officer')): ?>
+                    <li><a href="leave_management.php">
+                        <i class="fas fa-calendar-alt"></i> Leave Management
+                    </a></li>
                     <?php endif; ?>
-                    <li><a href="employee_appraisal.php">Performance Appraisal</a></li>
-                    <li><a href="payroll_mnagements.php" ><i class="fas fa-money-check"></i> Payroll</a></li>
+                    <li><a href="employee_appraisal.php">
+                        <i class="fas fa-star"></i> Performance Appraisal
+                    </a></li>
+                    <li><a href="payroll_mnagements.php">
+                        <i class="fas fa-money-check"></i> Payroll
+                    </a></li>
                 </ul>
             </nav>
         </div>
-
-        <!-- Main Content -->
+        
+        <!-- Main Content Area -->
         <div class="main-content">
-            <div class="header">
-                <button class="sidebar-toggle">☰</button>
-                <h1>Profile</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
-                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
-                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
-                </div>
-            </div>
             
+            <!-- Content -->
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type']; ?>">
                         <?php echo htmlspecialchars($flash['message']); ?>
                     </div>
                 <?php endif; ?>
+  
                 
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
