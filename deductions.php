@@ -38,7 +38,7 @@ function hasPermission($requiredRole) {
 }
 
 // Helper functions
-function getAllowanceStatusBadge($status) {
+function getDeductionStatusBadge($status) {
     $badges = [
         'active' => 'badge-success',
         'inactive' => 'badge-danger',
@@ -98,223 +98,118 @@ function getEmployeeIdFromUserId($conn, $user_id) {
     return 1; // Final fallback
 }
 
-// Function to get allowance amount
-function getAllowanceAmount($conn, $emp_id, $allowance_type_id) {
-    $emp_id = $conn->real_escape_string($emp_id);
-    $allowance_type_id = $conn->real_escape_string($allowance_type_id);
-    
-    $scaleQuery = "SELECT scale_id FROM employees WHERE id = '$emp_id'";
-    $scaleResult = $conn->query($scaleQuery);
-    
-    if ($scaleResult && $scaleResult->num_rows > 0) {
-        $employee = $scaleResult->fetch_assoc();
-        $scale_id = $employee['scale_id'];
-        
-        $amountQuery = "SELECT ";
-        if ($allowance_type_id == 1) { // House allowance
-            $amountQuery .= "house_allowance";
-        } else if ($allowance_type_id == 2) { // Commuter allowance
-            $amountQuery .= "commuter_allowance";
-        } else if ($allowance_type_id == 3 || $allowance_type_id == 6) { // Dirty allowance
-            $amountQuery .= "dirty_allowance";
-        } else if ($allowance_type_id == 5) { // Leave allowance
-            $amountQuery .= "leave_allowance";
-        } else {
-            $amountQuery .= "0";
-        }
-        $amountQuery .= " as amount FROM salary_bands WHERE scale_id = '$scale_id'";
-        
-        $amountResult = $conn->query($amountQuery);
-        if ($amountResult && $amountResult->num_rows > 0) {
-            $amountData = $amountResult->fetch_assoc();
-            return ['success' => true, 'amount' => $amountData['amount']];
-        } else {
-            return ['success' => false, 'message' => 'No salary band found for this scale'];
-        }
-    } else {
-        return ['success' => false, 'message' => 'Employee not found or no scale assigned'];
-    }
-}
-
 // Database connection
 $conn = getConnection();
 
 // Get the employee ID for the current user
 $current_employee_id = getEmployeeIdFromUserId($conn, $user['id']);
 
-// Handle allowance type actions
+// Handle deduction type actions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['add_allowance_type']) && hasPermission('hr_manager')) {
+    if (isset($_POST['add_deduction_type']) && hasPermission('hr_manager')) {
         $type_name = $conn->real_escape_string($_POST['type_name']);
         $description = $conn->real_escape_string($_POST['description']);
+        $calculation_method = $conn->real_escape_string($_POST['calculation_method']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
         
-        $insertQuery = "INSERT INTO allowance_types (type_name, description, is_active, created_at, updated_at) 
-                        VALUES ('$type_name', '$description', $is_active, NOW(), NOW())";
+        $insertQuery = "INSERT INTO deduction_types (type_name, description, calculation_method, is_active, created_at, updated_at) 
+                        VALUES ('$type_name', '$description', '$calculation_method', $is_active, NOW(), NOW())";
         
         if ($conn->query($insertQuery)) {
-            $_SESSION['flash_message'] = "Allowance type added successfully";
+            $_SESSION['flash_message'] = "Deduction type added successfully";
             $_SESSION['flash_type'] = "success";
-            header("Location: allowances.php");
+            header("Location: deductions.php");
             exit();
         } else {
-            $_SESSION['flash_message'] = "Error adding allowance type: " . $conn->error;
+            $_SESSION['flash_message'] = "Error adding deduction type: " . $conn->error;
             $_SESSION['flash_type'] = "danger";
         }
     }
     
-    if (isset($_POST['update_allowance_type']) && hasPermission('hr_manager')) {
-        $allowance_type_id = $conn->real_escape_string($_POST['allowance_type_id']);
+    if (isset($_POST['update_deduction_type']) && hasPermission('hr_manager')) {
+        $deduction_type_id = $conn->real_escape_string($_POST['deduction_type_id']);
         $type_name = $conn->real_escape_string($_POST['type_name']);
         $description = $conn->real_escape_string($_POST['description']);
+        $calculation_method = $conn->real_escape_string($_POST['calculation_method']);
         $is_active = isset($_POST['is_active']) ? 1 : 0;
         
-        $updateQuery = "UPDATE allowance_types SET 
+        $updateQuery = "UPDATE deduction_types SET 
                         type_name = '$type_name',
                         description = '$description',
+                        calculation_method = '$calculation_method',
                         is_active = $is_active,
                         updated_at = NOW()
-                        WHERE allowance_type_id = '$allowance_type_id'";
+                        WHERE deduction_type_id = '$deduction_type_id'";
         
         if ($conn->query($updateQuery)) {
-            $_SESSION['flash_message'] = "Allowance type updated successfully";
+            $_SESSION['flash_message'] = "Deduction type updated successfully";
             $_SESSION['flash_type'] = "success";
-            header("Location: allowances.php");
+            header("Location: deductions.php");
             exit();
         } else {
-            $_SESSION['flash_message'] = "Error updating allowance type: " . $conn->error;
+            $_SESSION['flash_message'] = "Error updating deduction type: " . $conn->error;
             $_SESSION['flash_type'] = "danger";
         }
     }
     
-    if (isset($_POST['add_allowance']) && hasPermission('hr_manager')) {
+    if (isset($_POST['add_deduction']) && hasPermission('hr_manager')) {
         $emp_id = $conn->real_escape_string($_POST['emp_id']);
-        $allowance_type_id = $conn->real_escape_string($_POST['allowance_type_id']);
+        $deduction_type_id = $conn->real_escape_string($_POST['deduction_type_id']);
+        $amount = $conn->real_escape_string($_POST['amount']);
         $effective_date = $conn->real_escape_string($_POST['effective_date']);
         $end_date = !empty($_POST['end_date']) ? "'" . $conn->real_escape_string($_POST['end_date']) . "'" : "NULL";
         $status = $conn->real_escape_string($_POST['status']);
-        $created_by = $current_employee_id; // Use employee ID instead of user ID
+        $created_by = $current_employee_id;
         
-        $amountData = getAllowanceAmount($conn, $emp_id, $allowance_type_id);
-        if ($amountData['success']) {
-            $amount = $amountData['amount'];
-            $insertQuery = "INSERT INTO employee_allowances (emp_id, allowance_type_id, amount, effective_date, end_date, status, created_by, created_at, updated_at) 
-                            VALUES ('$emp_id', '$allowance_type_id', '$amount', '$effective_date', $end_date, '$status', '$created_by', NOW(), NOW())";
-            
-            if ($conn->query($insertQuery)) {
-                $_SESSION['flash_message'] = "Allowance added successfully based on job group";
-                $_SESSION['flash_type'] = "success";
-                header("Location: allowances.php");
-                exit();
-            } else {
-                $_SESSION['flash_message'] = "Error adding allowance: " . $conn->error;
-                $_SESSION['flash_type'] = "danger";
-            }
+        $insertQuery = "INSERT INTO employee_deductions (emp_id, deduction_type_id, amount, effective_date, end_date, status, created_by, created_at, updated_at) 
+                        VALUES ('$emp_id', '$deduction_type_id', '$amount', '$effective_date', $end_date, '$status', '$created_by', NOW(), NOW())";
+        
+        if ($conn->query($insertQuery)) {
+            $_SESSION['flash_message'] = "Deduction added successfully";
+            $_SESSION['flash_type'] = "success";
+            header("Location: deductions.php");
+            exit();
         } else {
-            $_SESSION['flash_message'] = "Error: " . $amountData['message'];
+            $_SESSION['flash_message'] = "Error adding deduction: " . $conn->error;
             $_SESSION['flash_type'] = "danger";
         }
     }
     
-    if (isset($_POST['update_allowance']) && hasPermission('hr_manager')) {
-        $allowance_id = $conn->real_escape_string($_POST['allowance_id']);
-        $allowance_type_id = $conn->real_escape_string($_POST['allowance_type_id']);
+    if (isset($_POST['update_deduction']) && hasPermission('hr_manager')) {
+        $deduction_id = $conn->real_escape_string($_POST['deduction_id']);
+        $deduction_type_id = $conn->real_escape_string($_POST['deduction_type_id']);
         $amount = $conn->real_escape_string($_POST['amount']);
         $effective_date = $conn->real_escape_string($_POST['effective_date']);
         $end_date = !empty($_POST['end_date']) ? "'" . $conn->real_escape_string($_POST['end_date']) . "'" : "NULL";
         $status = $conn->real_escape_string($_POST['status']);
         
-        $updateQuery = "UPDATE employee_allowances SET 
-                        allowance_type_id = '$allowance_type_id',
+        $updateQuery = "UPDATE employee_deductions SET 
+                        deduction_type_id = '$deduction_type_id',
                         amount = '$amount',
                         effective_date = '$effective_date',
                         end_date = $end_date,
                         status = '$status',
                         updated_at = NOW()
-                        WHERE allowance_id = '$allowance_id'";
+                        WHERE deduction_id = '$deduction_id'";
         
         if ($conn->query($updateQuery)) {
-            $_SESSION['flash_message'] = "Allowance updated successfully";
+            $_SESSION['flash_message'] = "Deduction updated successfully";
             $_SESSION['flash_type'] = "success";
-            header("Location: allowances.php");
+            header("Location: deductions.php");
             exit();
         } else {
-            $_SESSION['flash_message'] = "Error updating allowance: " . $conn->error;
-            $_SESSION['flash_type'] = "danger";
-        }
-    }
-    
-    if (isset($_POST['bulk_assign']) && hasPermission('hr_manager')) {
-        $allowance_type_id = $conn->real_escape_string($_POST['allowance_type_id']);
-        $scale_id = $conn->real_escape_string($_POST['scale_id']);
-        $effective_date = $conn->real_escape_string($_POST['effective_date']);
-        $status = $conn->real_escape_string($_POST['status']);
-        $created_by = $current_employee_id; // Use employee ID instead of user ID
-        
-        $amountQuery = "SELECT ";
-        if ($allowance_type_id == 1) {
-            $amountQuery .= "house_allowance";
-        } else if ($allowance_type_id == 2) {
-            $amountQuery .= "commuter_allowance";
-        } else if ($allowance_type_id == 3 || $allowance_type_id == 6) {
-            $amountQuery .= "dirty_allowance";
-        } else if ($allowance_type_id == 5) {
-            $amountQuery .= "leave_allowance";
-        } else {
-            $amountQuery .= "0";
-        }
-        $amountQuery .= " as amount FROM salary_bands WHERE scale_id = '$scale_id'";
-        
-        $amountResult = $conn->query($amountQuery);
-        if ($amountResult && $amountResult->num_rows > 0) {
-            $amountData = $amountResult->fetch_assoc();
-            $amount = $amountData['amount'];
-            
-            $employeesQuery = "SELECT id FROM employees WHERE scale_id = '$scale_id'";
-            $employeesResult = $conn->query($employeesQuery);
-            
-            $successCount = 0;
-            $errorCount = 0;
-            
-            while ($employee = $employeesResult->fetch_assoc()) {
-                $emp_id = $employee['id'];
-                
-                $checkQuery = "SELECT allowance_id FROM employee_allowances 
-                              WHERE emp_id = '$emp_id' AND allowance_type_id = '$allowance_type_id' 
-                              AND status = 'active'";
-                $checkResult = $conn->query($checkQuery);
-                
-                if ($checkResult->num_rows == 0) {
-                    $insertQuery = "INSERT INTO employee_allowances (emp_id, allowance_type_id, amount, effective_date, status, created_by, created_at, updated_at) 
-                                    VALUES ('$emp_id', '$allowance_type_id', '$amount', '$effective_date', '$status', '$created_by', NOW(), NOW())";
-                    
-                    if ($conn->query($insertQuery)) {
-                        $successCount++;
-                    } else {
-                        $errorCount++;
-                    }
-                }
-            }
-            
-            $_SESSION['flash_message'] = "Bulk assignment complete: $successCount allowances added, $errorCount errors";
-            $_SESSION['flash_type'] = $errorCount > 0 ? "warning" : "success";
-            header("Location: allowances.php");
-            exit();
-        } else {
-            $_SESSION['flash_message'] = "Error: Could not determine allowance amount for this job group";
+            $_SESSION['flash_message'] = "Error updating deduction: " . $conn->error;
             $_SESSION['flash_type'] = "danger";
         }
     }
     
     if (isset($_POST['allocate_selected']) && hasPermission('hr_manager')) {
-        $period_id = $conn->real_escape_string($_POST['period_id']);
-        $allowance_type_id = $conn->real_escape_string($_POST['allowance_type_id']);
+        $deduction_type_id = $conn->real_escape_string($_POST['deduction_type_id']);
+        $amount = $conn->real_escape_string($_POST['amount']);
         $effective_date = $conn->real_escape_string($_POST['effective_date']);
         $end_date = !empty($_POST['end_date']) ? "'" . $conn->real_escape_string($_POST['end_date']) . "'" : "NULL";
         $status = $conn->real_escape_string($_POST['status']);
-        $created_by = $current_employee_id; // Use employee ID instead of user ID
-        $use_auto_amount = isset($_POST['use_auto_amount']);
-        $fixed_amount = $use_auto_amount ? 0 : $conn->real_escape_string($_POST['amount']);
+        $created_by = $current_employee_id;
         $emp_ids = $_POST['emp_ids'] ?? [];
         
         $successCount = 0;
@@ -323,25 +218,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         foreach ($emp_ids as $emp_id_val) {
             $emp_id = $conn->real_escape_string($emp_id_val);
             
-            if ($use_auto_amount) {
-                $amountData = getAllowanceAmount($conn, $emp_id, $allowance_type_id);
-                if (!$amountData['success']) {
-                    $errorCount++;
-                    continue;
-                }
-                $amount = $amountData['amount'];
-            } else {
-                $amount = $fixed_amount;
-            }
-            
-            $checkQuery = "SELECT allowance_id FROM employee_allowances 
-                          WHERE emp_id = '$emp_id' AND allowance_type_id = '$allowance_type_id' 
-                          AND period_id = '$period_id' AND status = 'active'";
+            $checkQuery = "SELECT deduction_id FROM employee_deductions 
+                          WHERE emp_id = '$emp_id' AND deduction_type_id = '$deduction_type_id' 
+                          AND status = 'active'";
             $checkResult = $conn->query($checkQuery);
             
             if ($checkResult->num_rows == 0) {
-                $insertQuery = "INSERT INTO employee_allowances (period_id, emp_id, allowance_type_id, amount, effective_date, end_date, status, created_by, created_at, updated_at) 
-                                VALUES ('$period_id', '$emp_id', '$allowance_type_id', '$amount', '$effective_date', $end_date, '$status', '$created_by', NOW(), NOW())";
+                $insertQuery = "INSERT INTO employee_deductions (emp_id, deduction_type_id, amount, effective_date, end_date, status, created_by, created_at, updated_at) 
+                                VALUES ('$emp_id', '$deduction_type_id', '$amount', '$effective_date', $end_date, '$status', '$created_by', NOW(), NOW())";
                 
                 if ($conn->query($insertQuery)) {
                     $successCount++;
@@ -351,49 +235,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
         
-        $_SESSION['flash_message'] = "Allocation complete: $successCount allowances added, $errorCount errors";
+        $_SESSION['flash_message'] = "Allocation complete: $successCount deductions added, $errorCount errors";
         $_SESSION['flash_type'] = $errorCount > 0 ? "warning" : "success";
-        header("Location: allowances.php");
+        header("Location: deductions.php");
         exit();
     }
 }
 
-if (isset($_GET['action']) && $_GET['action'] == 'delete_allowance_type' && isset($_GET['id']) && hasPermission('hr_manager')) {
+if (isset($_GET['action']) && $_GET['action'] == 'delete_deduction_type' && isset($_GET['id']) && hasPermission('hr_manager')) {
     $id = $conn->real_escape_string($_GET['id']);
-    $deleteQuery = "DELETE FROM allowance_types WHERE allowance_type_id = '$id'";
+    $deleteQuery = "DELETE FROM deduction_types WHERE deduction_type_id = '$id'";
     if ($conn->query($deleteQuery)) {
-        $_SESSION['flash_message'] = "Allowance type deleted successfully";
+        $_SESSION['flash_message'] = "Deduction type deleted successfully";
         $_SESSION['flash_type'] = "success";
-        header("Location: allowances.php");
+        header("Location: deductions.php");
         exit();
     } else {
-        $_SESSION['flash_message'] = "Error deleting allowance type: " . $conn->error;
+        $_SESSION['flash_message'] = "Error deleting deduction type: " . $conn->error;
         $_SESSION['flash_type'] = "danger";
     }
 }
 
 if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']) && hasPermission('hr_manager')) {
     $id = $conn->real_escape_string($_GET['id']);
-    $deleteQuery = "DELETE FROM employee_allowances WHERE allowance_id = '$id'";
+    $deleteQuery = "DELETE FROM employee_deductions WHERE deduction_id = '$id'";
     if ($conn->query($deleteQuery)) {
-        $_SESSION['flash_message'] = "Allowance record deleted successfully";
+        $_SESSION['flash_message'] = "Deduction record deleted successfully";
         $_SESSION['flash_type'] = "success";
-        header("Location: allowances.php");
+        header("Location: deductions.php");
         exit();
     } else {
         $_SESSION['flash_message'] = "Error deleting record: " . $conn->error;
         $_SESSION['flash_type'] = "danger";
     }
-}
-
-// Handle inline allowance amount request
-$allowanceAmountResponse = null;
-if (isset($_POST['get_amount']) && isset($_POST['emp_id']) && isset($_POST['allowance_type_id'])) {
-    $allowanceAmountResponse = getAllowanceAmount($conn, $_POST['emp_id'], $_POST['allowance_type_id']);
-    header('Content-Type: application/json');
-    echo json_encode($allowanceAmountResponse);
-    $conn->close();
-    exit();
 }
 
 // Fetch all employees for dropdown and list
@@ -406,44 +280,24 @@ if ($employeesResult && $employeesResult->num_rows > 0) {
     }
 }
 
-// Fetch all allowance types
-$allowanceTypes = [];
-$typesQuery = "SELECT allowance_type_id, type_name FROM allowance_types WHERE is_active = TRUE ORDER BY type_name";
+// Fetch all deduction types
+$deductionTypes = [];
+$typesQuery = "SELECT deduction_type_id, type_name, calculation_method FROM deduction_types WHERE is_active = TRUE ORDER BY type_name";
 $typesResult = $conn->query($typesQuery);
 if ($typesResult && $typesResult->num_rows > 0) {
     while ($type = $typesResult->fetch_assoc()) {
-        $allowanceTypes[$type['allowance_type_id']] = $type['type_name'];
+        $deductionTypes[$type['deduction_type_id']] = $type['type_name'];
     }
 }
 
-// Fetch all allowance types for management
-$allAllowanceTypes = [];
-$allTypesQuery = "SELECT allowance_type_id, type_name, description, is_active, created_at, updated_at 
-                  FROM allowance_types ORDER BY type_name";
+// Fetch all deduction types for management
+$allDeductionTypes = [];
+$allTypesQuery = "SELECT deduction_type_id, type_name, description, calculation_method, is_active, created_at, updated_at 
+                  FROM deduction_types ORDER BY type_name";
 $allTypesResult = $conn->query($allTypesQuery);
 if ($allTypesResult && $allTypesResult->num_rows > 0) {
     while ($type = $allTypesResult->fetch_assoc()) {
-        $allAllowanceTypes[] = $type;
-    }
-}
-
-// Fetch all periods
-$periods = [];
-$periodsQuery = "SELECT id, CONCAT(period_name) AS period_name FROM payroll_periods ORDER BY start_date DESC";
-$periodsResult = $conn->query($periodsQuery);
-if ($periodsResult && $periodsResult->num_rows > 0) {
-    while ($period = $periodsResult->fetch_assoc()) {
-        $periods[$period['id']] = $period['period_name'];
-    }
-}
-
-// Fetch all salary bands for bulk assignment
-$salaryBands = [];
-$bandsQuery = "SELECT scale_id FROM salary_bands ORDER BY scale_id";
-$bandsResult = $conn->query($bandsQuery);
-if ($bandsResult && $bandsResult->num_rows > 0) {
-    while ($band = $bandsResult->fetch_assoc()) {
-        $salaryBands[] = $band['scale_id'];
+        $allDeductionTypes[] = $type;
     }
 }
 
@@ -451,86 +305,86 @@ if ($bandsResult && $bandsResult->num_rows > 0) {
 $editRecord = null;
 if (isset($_GET['action']) && $_GET['action'] == 'edit' && isset($_GET['id']) && hasPermission('hr_manager')) {
     $id = $conn->real_escape_string($_GET['id']);
-    $editQuery = "SELECT ea.*, e.first_name, e.last_name, e.scale_id, at.type_name 
-                  FROM employee_allowances ea
-                  JOIN employees e ON ea.emp_id = e.id
-                  JOIN allowance_types at ON ea.allowance_type_id = at.allowance_type_id
-                  WHERE ea.allowance_id = '$id'";
+    $editQuery = "SELECT ed.*, e.first_name, e.last_name, e.scale_id, dt.type_name 
+                  FROM employee_deductions ed
+                  JOIN employees e ON ed.emp_id = e.id
+                  JOIN deduction_types dt ON ed.deduction_type_id = dt.deduction_type_id
+                  WHERE ed.deduction_id = '$id'";
     $editResult = $conn->query($editQuery);
     if ($editResult && $editResult->num_rows > 0) {
         $editRecord = $editResult->fetch_assoc();
     } else {
         $_SESSION['flash_message'] = "Error fetching record: " . ($editResult ? "No record found" : $conn->error);
         $_SESSION['flash_type'] = "danger";
-        header("Location: allowances.php");
+        header("Location: deductions.php");
         exit();
     }
 }
 
-// Get allowance type for editing
-$editAllowanceType = null;
-if (isset($_GET['action']) && $_GET['action'] == 'edit_allowance_type' && isset($_GET['id']) && hasPermission('hr_manager')) {
+// Get deduction type for editing
+$editDeductionType = null;
+if (isset($_GET['action']) && $_GET['action'] == 'edit_deduction_type' && isset($_GET['id']) && hasPermission('hr_manager')) {
     $id = $conn->real_escape_string($_GET['id']);
-    $editQuery = "SELECT * FROM allowance_types WHERE allowance_type_id = '$id'";
+    $editQuery = "SELECT * FROM deduction_types WHERE deduction_type_id = '$id'";
     $editResult = $conn->query($editQuery);
     if ($editResult && $editResult->num_rows > 0) {
-        $editAllowanceType = $editResult->fetch_assoc();
+        $editDeductionType = $editResult->fetch_assoc();
     } else {
-        $_SESSION['flash_message'] = "Error fetching allowance type: " . ($editResult ? "No record found" : $conn->error);
+        $_SESSION['flash_message'] = "Error fetching deduction type: " . ($editResult ? "No record found" : $conn->error);
         $_SESSION['flash_type'] = "danger";
-        header("Location: allowances.php");
+        header("Location: deductions.php");
         exit();
     }
 }
 
-// Pagination and sorting for allowances
+// Pagination and sorting for deductions
 $rowsPerPage = isset($_GET['rows']) && in_array($_GET['rows'], [25, 50, 100, 250, 500]) ? (int)$_GET['rows'] : 25;
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($page - 1) * $rowsPerPage;
 
-$sortBy = isset($_GET['sort']) && in_array($_GET['sort'], ['allowance_id', 'emp_id', 'type_name', 'amount', 'status']) ? $_GET['sort'] : 'allowance_id';
+$sortBy = isset($_GET['sort']) && in_array($_GET['sort'], ['deduction_id', 'emp_id', 'type_name', 'amount', 'status']) ? $_GET['sort'] : 'deduction_id';
 $sortOrder = isset($_GET['order']) && strtoupper($_GET['order']) === 'DESC' ? 'DESC' : 'ASC';
 $filter = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
 
 $whereClause = '';
 if ($filter) {
-    $whereClause = "WHERE e.first_name LIKE '%$filter%' OR e.last_name LIKE '%$filter%' OR at.type_name LIKE '%$filter%' OR e.scale_id LIKE '%$filter%'";
+    $whereClause = "WHERE e.first_name LIKE '%$filter%' OR e.last_name LIKE '%$filter%' OR dt.type_name LIKE '%$filter%' OR e.scale_id LIKE '%$filter%'";
 }
 
-$countQuery = "SELECT COUNT(*) as count FROM employee_allowances ea
-               JOIN employees e ON ea.emp_id = e.id
-               JOIN allowance_types at ON ea.allowance_type_id = at.allowance_type_id
+$countQuery = "SELECT COUNT(*) as count FROM employee_deductions ed
+               JOIN employees e ON ed.emp_id = e.id
+               JOIN deduction_types dt ON ed.deduction_type_id = dt.deduction_type_id
                $whereClause";
 $countResult = $conn->query($countQuery);
 $totalRecords = $countResult->fetch_assoc()['count'];
 $totalPages = ceil($totalRecords / $rowsPerPage);
 
-$query = "SELECT ea.allowance_id, ea.emp_id, ea.allowance_type_id, ea.amount, ea.effective_date, 
-                 ea.end_date, ea.status, e.first_name, e.last_name, e.scale_id, at.type_name 
-          FROM employee_allowances ea
-          JOIN employees e ON ea.emp_id = e.id
-          JOIN allowance_types at ON ea.allowance_type_id = at.allowance_type_id
+$query = "SELECT ed.deduction_id, ed.emp_id, ed.deduction_type_id, ed.amount, ed.effective_date, 
+                 ed.end_date, ed.status, e.first_name, e.last_name, e.scale_id, dt.type_name 
+          FROM employee_deductions ed
+          JOIN employees e ON ed.emp_id = e.id
+          JOIN deduction_types dt ON ed.deduction_type_id = dt.deduction_type_id
           $whereClause 
           ORDER BY $sortBy $sortOrder 
           LIMIT $offset, $rowsPerPage";
 $result = $conn->query($query);
 
-$allowanceRecords = [];
+$deductionRecords = [];
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        $allowanceRecords[] = $row;
+        $deductionRecords[] = $row;
     }
 } else {
     $_SESSION['flash_message'] = "Error fetching records: " . $conn->error;
     $_SESSION['flash_type'] = "danger";
 }
 
-// Pagination and sorting for allowance types
+// Pagination and sorting for deduction types
 $typesRowsPerPage = isset($_GET['types_rows']) && in_array($_GET['types_rows'], [25, 50, 100]) ? (int)$_GET['types_rows'] : 25;
 $typesPage = isset($_GET['types_page']) ? max(1, (int)$_GET['types_page']) : 1;
 $typesOffset = ($typesPage - 1) * $typesRowsPerPage;
 
-$typesSortBy = isset($_GET['types_sort']) && in_array($_GET['types_sort'], ['allowance_type_id', 'type_name', 'is_active', 'created_at']) ? $_GET['types_sort'] : 'type_name';
+$typesSortBy = isset($_GET['types_sort']) && in_array($_GET['types_sort'], ['deduction_type_id', 'type_name', 'is_active', 'created_at']) ? $_GET['types_sort'] : 'type_name';
 $typesSortOrder = isset($_GET['types_order']) && strtoupper($_GET['types_order']) === 'DESC' ? 'DESC' : 'ASC';
 $typesFilter = isset($_GET['types_search']) ? $conn->real_escape_string($_GET['types_search']) : '';
 
@@ -539,26 +393,26 @@ if ($typesFilter) {
     $typesWhereClause = "WHERE type_name LIKE '%$typesFilter%' OR description LIKE '%$typesFilter%'";
 }
 
-$typesCountQuery = "SELECT COUNT(*) as count FROM allowance_types $typesWhereClause";
+$typesCountQuery = "SELECT COUNT(*) as count FROM deduction_types $typesWhereClause";
 $typesCountResult = $conn->query($typesCountQuery);
 $typesTotalRecords = $typesCountResult->fetch_assoc()['count'];
 $typesTotalPages = ceil($typesTotalRecords / $typesRowsPerPage);
 
-$typesQuery = "SELECT * FROM allowance_types $typesWhereClause 
+$typesQuery = "SELECT * FROM deduction_types $typesWhereClause 
                ORDER BY $typesSortBy $typesSortOrder 
                LIMIT $typesOffset, $typesRowsPerPage";
 $typesResult = $conn->query($typesQuery);
 
-$allAllowanceTypes = [];
+$allDeductionTypes = [];
 if ($typesResult) {
     while ($row = $typesResult->fetch_assoc()) {
-        $allAllowanceTypes[] = $row;
+        $allDeductionTypes[] = $row;
     }
 }
 
 $conn->close();
 
-$pageTitle = "Allowances Management";
+$pageTitle = "Deductions Management";
 require_once 'header.php';
 ?>
 
@@ -567,10 +421,10 @@ require_once 'header.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Allowances - HR Management System</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Deductions - HR Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .bulk-assign-section, .allowance-types-section {
+        .bulk-assign-section, .deduction-types-section {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             padding: 20px;
@@ -578,7 +432,7 @@ require_once 'header.php';
             margin-bottom: 20px;
         }
         
-        .bulk-assign-section h4, .allowance-types-section h4 {
+        .bulk-assign-section h4, .deduction-types-section h4 {
             margin-top: 0;
             color: #ffffff;
         }
@@ -787,20 +641,6 @@ require_once 'header.php';
 
         /* Responsive Design */
         @media (max-width: 768px) {
-            .sidebar {
-                width: 200px;
-            }
-
-            .main-content {
-                margin-left: 220px;
-            }
-
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
-
             .table-controls {
                 flex-wrap: wrap;
                 gap: 10px;
@@ -813,17 +653,6 @@ require_once 'header.php';
         }
 
         @media (max-width: 576px) {
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-
-            .main-content {
-                margin-left: 0;
-                padding: 10px;
-            }
-
             .table-controls {
                 flex-direction: column;
                 align-items: flex-start;
@@ -832,6 +661,42 @@ require_once 'header.php';
             .tabs {
                 flex-direction: column;
             }
+        }
+        
+        .calculation-method {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .method-option {
+            flex: 1;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        
+        .method-option:hover {
+            border-color: #4e73df;
+            background: rgba(78, 115, 223, 0.1);
+        }
+        
+        .method-option.selected {
+            border-color: #4e73df;
+            background: rgba(78, 115, 223, 0.2);
+        }
+        
+        .method-option h4 {
+            margin-bottom: 8px;
+            color: #ffffff;
+        }
+        
+        .method-option p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
         }
     </style>
 </head>
@@ -884,22 +749,21 @@ require_once 'header.php';
                 </ul>
             </nav>
         </div>
-        
         <!-- Main Content -->
         <div class="main-content">
             <div class="content">
                 <!-- Tabs Navigation -->
                 <div class="tabs">
                     <a href="payroll_management.php">Payroll Management</a>
-                    <a href="deductions.php">Deductions</a>
-                    <a href="allowances.php" class="active">Allowances</a>
+                    <a href="deductions.php" class="active">Deductions</a>
+                    <a href="allowances.php">Allowances</a>
                     <a href="add_bank.php">Add Banks</a>
                     <a href="periods.php">Periods</a>
                     <a href="mp_profile.php">MP Profile</a>
                 </div>
                 <div class="tab-nav">
-                    <a href="#cycles" class="tab-link active" onclick="showTab('cycles')">Allowance Types</a>
-                    <a href="#indicators" class="tab-link" onclick="showTab('indicators')">Allowance Allocation</a>
+                    <a href="#deductions" class="tab-link active" onclick="showTab('deductions')">Deduction Allocation</a>
+                    <a href="#types" class="tab-link" onclick="showTab('types')">Deduction Types</a>
                 </div>
 
                 <?php $flash = getFlashMessage(); if ($flash): ?>
@@ -911,37 +775,23 @@ require_once 'header.php';
                 <!-- Allocate to Selected Employees Section -->
                 <?php if (hasPermission('hr_manager')): ?>
                 <div class="bulk-assign-section">
-                    <h4>Allocate Allowances to Selected Employees</h4>
-                    <form method="POST" action="allowances.php">
+                    <h4>Allocate Deductions to Selected Employees</h4>
+                    <form method="POST" action="deductions.php">
                         <input type="hidden" name="allocate_selected" value="1">
                         
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label" for="alloc_period_id">Period</label>
-                                <select class="form-control" id="alloc_period_id" name="period_id" required>
-                                    <option value="">Select Period</option>
-                                    <?php foreach ($periods as $id => $name): ?>
+                                <label class="form-label" for="alloc_deduction_type_id">Deduction Type</label>
+                                <select class="form-control" id="alloc_deduction_type_id" name="deduction_type_id" required>
+                                    <option value="">Select Deduction Type</option>
+                                    <?php foreach ($deductionTypes as $id => $name): ?>
                                         <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             
                             <div class="form-group">
-                                <label class="form-label" for="alloc_allowance_type_id">Allowance Type</label>
-                                <select class="form-control" id="alloc_allowance_type_id" name="allowance_type_id" required>
-                                    <option value="">Select Allowance Type</option>
-                                    <?php foreach ($allowanceTypes as $id => $name): ?>
-                                        <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><input type="checkbox" name="use_auto_amount" id="use_auto_amount" onclick="toggleAmountInput()"> Use job group based amount</label>
-                            </div>
-                            
-                            <div class="form-group" id="amount_group">
-                                <label class="form-label" for="alloc_amount">Fixed Amount</label>
+                                <label class="form-label" for="alloc_amount">Amount</label>
                                 <input type="number" step="0.01" class="form-control" id="alloc_amount" name="amount" required>
                             </div>
                         </div>
@@ -971,7 +821,7 @@ require_once 'header.php';
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th><input type="checkbox" id="select_all" onclick="toggleSelectAll()"></th>
+                                        <th><input type="checkbox" id="select_all" onclick="toggleSelectAll()"> Select All</th>
                                         <th>Employee Name</th>
                                         <th>Scale</th>
                                     </tr>
@@ -988,23 +838,23 @@ require_once 'header.php';
                             </table>
                         </div>
                         
-                        <button type="submit" class="btn btn-primary">Allocate Allowance</button>
+                        <button type="submit" class="btn btn-primary">Allocate Deduction</button>
                     </form>
                 </div>
                 <?php endif; ?>
 
-                <!-- Allowance Types Section -->
+                <!-- Deduction Types Section -->
                 <?php if (hasPermission('hr_manager')): ?>
-                <div class="allowance-types-section">
+                <div class="deduction-types-section">
                     <div class="d-flex justify-between align-center mb-3">
-                        <h3>Allowance Types</h3>
+                        <h3>Deduction Types</h3>
                         <button class="btn btn-primary" onclick="document.getElementById('addTypeModal').style.display='block'">
-                            <i class="fas fa-plus"></i> Add Allowance Type
+                            <i class="fas fa-plus"></i> Add Deduction Type
                         </button>
                     </div>
                     
                     <div class="table-controls">
-                        <form method="GET" action="allowances.php">
+                        <form method="GET" action="deductions.php">
                             <label for="types_search">Search:</label>
                             <input type="text" id="types_search" name="types_search" value="<?php echo htmlspecialchars($typesFilter); ?>" placeholder="Search by type name or description">
                             <input type="hidden" name="types_page" value="<?php echo $typesPage; ?>">
@@ -1020,6 +870,7 @@ require_once 'header.php';
                             <tr>
                                 <th>Type Name</th>
                                 <th>Description</th>
+                                <th>Calculation Method</th>
                                 <th>Active</th>
                                 <th>Created At</th>
                                 <th>Updated At</th>
@@ -1027,28 +878,30 @@ require_once 'header.php';
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (empty($allAllowanceTypes)): ?>
+                            <?php if (empty($allDeductionTypes)): ?>
                                 <tr>
-                                    <td colspan="6" class="text-center">No allowance types found</td>
+                                    <td colspan="7" class="text-center">No deduction types found</td>
                                 </tr>
                             <?php else: ?>
-                                <?php foreach ($allAllowanceTypes as $type): ?>
+                                <?php foreach ($allDeductionTypes as $type): ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($type['type_name']); ?></td>
                                     <td><?php echo htmlspecialchars($type['description']); ?></td>
+                                    <td><?php echo htmlspecialchars($type['calculation_method']); ?></td>
                                     <td><?php echo $type['is_active'] ? 'Yes' : 'No'; ?></td>
                                     <td><?php echo formatDate($type['created_at']); ?></td>
                                     <td><?php echo formatDate($type['updated_at']); ?></td>
                                     <td>
                                         <button class="btn btn-sm btn-primary edit-type-btn" 
-                                                data-id="<?php echo $type['allowance_type_id']; ?>"
+                                                data-id="<?php echo $type['deduction_type_id']; ?>"
                                                 data-type-name="<?php echo htmlspecialchars($type['type_name']); ?>"
                                                 data-description="<?php echo htmlspecialchars($type['description']); ?>"
+                                                data-calculation-method="<?php echo htmlspecialchars($type['calculation_method']); ?>"
                                                 data-is-active="<?php echo $type['is_active']; ?>">
                                             Edit
                                         </button>
                                         <button class="btn btn-sm btn-danger delete-type-btn" 
-                                                data-id="<?php echo $type['allowance_type_id']; ?>"
+                                                data-id="<?php echo $type['deduction_type_id']; ?>"
                                                 data-name="<?php echo htmlspecialchars($type['type_name']); ?>">
                                             Delete
                                         </button>
@@ -1059,18 +912,18 @@ require_once 'header.php';
                         </tbody>
                     </table>
 
-                    <!-- Pagination for Allowance Types -->
+                    <!-- Pagination for Deduction Types -->
                     <div class="pagination">
                         <p>Showing <?php echo min($typesTotalRecords, $typesOffset + 1); ?> to <?php echo min($typesTotalRecords, $typesOffset + $typesRowsPerPage); ?> of <?php echo $typesTotalRecords; ?> entries</p>
                         <div class="pagination-links">
                             <?php if ($typesPage > 1): ?>
-                                <a href="allowances.php?types_page=<?php echo $typesPage - 1; ?>&types_rows=<?php echo $typesRowsPerPage; ?>&types_sort=<?php echo $typesSortBy; ?>&types_order=<?php echo $typesSortOrder; ?>&types_search=<?php echo urlencode($typesFilter); ?>" class="btn btn-sm btn-secondary">Previous</a>
+                                <a href="deductions.php?types_page=<?php echo $typesPage - 1; ?>&types_rows=<?php echo $typesRowsPerPage; ?>&types_sort=<?php echo $typesSortBy; ?>&types_order=<?php echo $typesSortOrder; ?>&types_search=<?php echo urlencode($typesFilter); ?>" class="btn btn-sm btn-secondary">Previous</a>
                             <?php endif; ?>
                             <?php for ($i = 1; $i <= $typesTotalPages; $i++): ?>
-                                <a href="allowances.php?types_page=<?php echo $i; ?>&types_rows=<?php echo $typesRowsPerPage; ?>&types_sort=<?php echo $typesSortBy; ?>&types_order=<?php echo $typesSortOrder; ?>&types_search=<?php echo urlencode($typesFilter); ?>" class="btn btn-sm <?php echo $i == $typesPage ? 'btn-primary' : 'btn-secondary'; ?>"><?php echo $i; ?></a>
+                                <a href="deductions.php?types_page=<?php echo $i; ?>&types_rows=<?php echo $typesRowsPerPage; ?>&types_sort=<?php echo $typesSortBy; ?>&types_order=<?php echo $typesSortOrder; ?>&types_search=<?php echo urlencode($typesFilter); ?>" class="btn btn-sm <?php echo $i == $typesPage ? 'btn-primary' : 'btn-secondary'; ?>"><?php echo $i; ?></a>
                             <?php endfor; ?>
                             <?php if ($typesPage < $typesTotalPages): ?>
-                                <a href="allowances.php?types_page=<?php echo $typesPage + 1; ?>&types_rows=<?php echo $typesRowsPerPage; ?>&types_sort=<?php echo $typesSortBy; ?>&types_order=<?php echo $typesSortOrder; ?>&types_search=<?php echo urlencode($typesFilter); ?>" class="btn btn-sm btn-secondary">Next</a>
+                                <a href="deductions.php?types_page=<?php echo $typesPage + 1; ?>&types_rows=<?php echo $typesRowsPerPage; ?>&types_sort=<?php echo $typesSortBy; ?>&types_order=<?php echo $typesSortOrder; ?>&types_search=<?php echo urlencode($typesFilter); ?>" class="btn btn-sm btn-secondary">Next</a>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -1080,21 +933,21 @@ require_once 'header.php';
         </div>
     </div>
 
-    <!-- Add Allowance Modal -->
+    <!-- Add Deduction Modal -->
     <div id="addModal" class="modal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Allowance</h5>
+                    <h5 class="modal-title">Add New Deduction</h5>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
-                <form method="POST" action="allowances.php" id="addAllowanceForm">
+                <form method="POST" action="deductions.php">
                     <div class="modal-body">
-                        <input type="hidden" name="add_allowance" value="1">
+                        <input type="hidden" name="add_deduction" value="1">
                         
                         <div class="form-group">
                             <label class="form-label" for="add_emp_id">Employee</label>
-                            <select class="form-control" id="add_emp_id" name="emp_id" required onchange="updateAllowanceAmount()">
+                            <select class="form-control" id="add_emp_id" name="emp_id" required>
                                 <option value="">Select Employee</option>
                                 <?php foreach ($employees as $employee): ?>
                                     <option value="<?php echo $employee['id']; ?>"><?php echo htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name'] . ($employee['scale_id'] ? ' (Scale ' . $employee['scale_id'] . ')' : '')); ?></option>
@@ -1103,19 +956,18 @@ require_once 'header.php';
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label" for="add_allowance_type_id">Allowance Type</label>
-                            <select class="form-control" id="add_allowance_type_id" name="allowance_type_id" required onchange="updateAllowanceAmount()">
-                                <option value="">Select Allowance Type</option>
-                                <?php foreach ($allowanceTypes as $id => $name): ?>
+                            <label class="form-label" for="add_deduction_type_id">Deduction Type</label>
+                            <select class="form-control" id="add_deduction_type_id" name="deduction_type_id" required>
+                                <option value="">Select Deduction Type</option>
+                                <?php foreach ($deductionTypes as $id => $name): ?>
                                     <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label" for="add_amount">Amount (Automatically determined by job group)</label>
-                            <input type="text" class="form-control" id="add_amount_display" readonly>
-                            <small class="text-muted">This amount is based on the employee's job group</small>
+                            <label class="form-label" for="add_amount">Amount</label>
+                            <input type="number" step="0.01" class="form-control" id="add_amount" name="amount" required>
                         </div>
                         
                         <div class="form-row">
@@ -1141,25 +993,25 @@ require_once 'header.php';
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Add Allowance</button>
+                        <button type="submit" class="btn btn-primary">Add Deduction</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Edit Allowance Modal -->
+    <!-- Edit Deduction Modal -->
     <div id="editModal" class="modal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Allowance</h5>
+                    <h5 class="modal-title">Edit Deduction</h5>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
-                <form method="POST" action="allowances.php">
+                <form method="POST" action="deductions.php">
                     <div class="modal-body">
-                        <input type="hidden" name="allowance_id" id="edit_allowance_id">
-                        <input type="hidden" name="update_allowance" value="1">
+                        <input type="hidden" name="deduction_id" id="edit_deduction_id">
+                        <input type="hidden" name="update_deduction" value="1">
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_emp_id">Employee</label>
@@ -1172,10 +1024,10 @@ require_once 'header.php';
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label" for="edit_allowance_type_id">Allowance Type</label>
-                            <select class="form-control" id="edit_allowance_type_id" name="allowance_type_id" required>
-                                <option value="">Select Allowance Type</option>
-                                <?php foreach ($allowanceTypes as $id => $name): ?>
+                            <label class="form-label" for="edit_deduction_type_id">Deduction Type</label>
+                            <select class="form-control" id="edit_deduction_type_id" name="deduction_type_id" required>
+                                <option value="">Select Deduction Type</option>
+                                <?php foreach ($deductionTypes as $id => $name): ?>
                                     <option value="<?php echo $id; ?>"><?php echo htmlspecialchars($name); ?></option>
                                 <?php endforeach; ?>
                             </select>
@@ -1209,14 +1061,14 @@ require_once 'header.php';
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Allowance</button>
+                        <button type="submit" class="btn btn-primary">Update Deduction</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Delete Allowance Modal -->
+    <!-- Delete Deduction Modal -->
     <div id="deleteModal" class="modal">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1225,7 +1077,7 @@ require_once 'header.php';
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p>Are you sure you want to delete the allowance record for <span id="delete_allowance_name"></span>?</p>
+                    <p>Are you sure you want to delete the deduction record for <span id="delete_deduction_name"></span>?</p>
                     <p class="text-danger"><strong>This action cannot be undone.</strong></p>
                 </div>
                 <div class="modal-footer">
@@ -1236,17 +1088,17 @@ require_once 'header.php';
         </div>
     </div>
 
-    <!-- Add Allowance Type Modal -->
+    <!-- Add Deduction Type Modal -->
     <div id="addTypeModal" class="modal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Allowance Type</h5>
+                    <h5 class="modal-title">Add New Deduction Type</h5>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
-                <form method="POST" action="allowances.php">
+                <form method="POST" action="deductions.php">
                     <div class="modal-body">
-                        <input type="hidden" name="add_allowance_type" value="1">
+                        <input type="hidden" name="add_deduction_type" value="1">
                         
                         <div class="form-group">
                             <label class="form-label" for="add_type_name">Type Name</label>
@@ -1259,31 +1111,50 @@ require_once 'header.php';
                         </div>
                         
                         <div class="form-group">
+                            <label class="form-label">Calculation Method</label>
+                            <div class="calculation-method">
+                                <div class="method-option" data-method="percentage" onclick="selectMethod('percentage')">
+                                    <h4>Percentage</h4>
+                                    <p>Calculate as percentage of salary</p>
+                                </div>
+                                <div class="method-option" data-method="fixed" onclick="selectMethod('fixed')">
+                                    <h4>Fixed Amount</h4>
+                                    <p>Fixed amount regardless of salary</p>
+                                </div>
+                                <div class="method-option" data-method="formula" onclick="selectMethod('formula')">
+                                    <h4>Formula</h4>
+                                    <p>Complex calculation formula</p>
+                                </div>
+                            </div>
+                            <input type="hidden" id="calculation_method" name="calculation_method" required>
+                        </div>
+                        
+                        <div class="form-group">
                             <label class="form-label" for="add_is_active">Active</label>
                             <input type="checkbox" id="add_is_active" name="is_active" checked>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Add Allowance Type</button>
+                        <button type="submit" class="btn btn-primary">Add Deduction Type</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Edit Allowance Type Modal -->
+    <!-- Edit Deduction Type Modal -->
     <div id="editTypeModal" class="modal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Allowance Type</h5>
+                    <h5 class="modal-title">Edit Deduction Type</h5>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
-                <form method="POST" action="allowances.php">
+                <form method="POST" action="deductions.php">
                     <div class="modal-body">
-                        <input type="hidden" name="allowance_type_id" id="edit_type_id">
-                        <input type="hidden" name="update_allowance_type" value="1">
+                        <input type="hidden" name="deduction_type_id" id="edit_type_id">
+                        <input type="hidden" name="update_deduction_type" value="1">
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_type_name">Type Name</label>
@@ -1296,20 +1167,39 @@ require_once 'header.php';
                         </div>
                         
                         <div class="form-group">
+                            <label class="form-label">Calculation Method</label>
+                            <div class="calculation-method">
+                                <div class="method-option" data-method="percentage" onclick="selectEditMethod('percentage')">
+                                    <h4>Percentage</h4>
+                                    <p>Calculate as percentage of salary</p>
+                                </div>
+                                <div class="method-option" data-method="fixed" onclick="selectEditMethod('fixed')">
+                                    <h4>Fixed Amount</h4>
+                                    <p>Fixed amount regardless of salary</p>
+                                </div>
+                                <div class="method-option" data-method="formula" onclick="selectEditMethod('formula')">
+                                    <h4>Formula</h4>
+                                    <p>Complex calculation formula</p>
+                                </div>
+                            </div>
+                            <input type="hidden" id="edit_calculation_method" name="calculation_method" required>
+                        </div>
+                        
+                        <div class="form-group">
                             <label class="form-label" for="edit_is_active">Active</label>
                             <input type="checkbox" id="edit_is_active" name="is_active">
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Allowance Type</button>
+                        <button type="submit" class="btn btn-primary">Update Deduction Type</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Delete Allowance Type Modal -->
+    <!-- Delete Deduction Type Modal -->
     <div id="deleteTypeModal" class="modal">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1318,7 +1208,7 @@ require_once 'header.php';
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p>Are you sure you want to delete the allowance type <span id="delete_type_name"></span>?</p>
+                    <p>Are you sure you want to delete the deduction type <span id="delete_type_name"></span>?</p>
                     <p class="text-danger"><strong>This action cannot be undone.</strong></p>
                 </div>
                 <div class="modal-footer">
@@ -1330,10 +1220,27 @@ require_once 'header.php';
     </div>
 
     <script>
-        // Handle edit button clicks for allowances
+        // Tab switching functionality
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // Show the selected tab content
+            document.getElementById(tabName).style.display = 'block';
+            
+            // Update active tab link
+            document.querySelectorAll('.tab-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.querySelector(`.tab-link[href="#${tabName}"]`).classList.add('active');
+        }
+        
+        // Handle edit button clicks for deductions
         document.querySelectorAll('.edit-btn').forEach(button => {
             button.addEventListener('click', function() {
-                const allowanceId = this.getAttribute('data-id');
+                const deductionId = this.getAttribute('data-id');
                 const empId = this.getAttribute('data-emp-id');
                 const typeId = this.getAttribute('data-type-id');
                 const amount = this.getAttribute('data-amount');
@@ -1341,9 +1248,9 @@ require_once 'header.php';
                 const endDate = this.getAttribute('data-end-date');
                 const status = this.getAttribute('data-status');
                 
-                document.getElementById('edit_allowance_id').value = allowanceId;
+                document.getElementById('edit_deduction_id').value = deductionId;
                 document.getElementById('edit_emp_id').value = empId;
-                document.getElementById('edit_allowance_type_id').value = typeId;
+                document.getElementById('edit_deduction_type_id').value = typeId;
                 document.getElementById('edit_amount').value = amount;
                 document.getElementById('edit_effective_date').value = effectiveDate;
                 document.getElementById('edit_end_date').value = endDate;
@@ -1353,44 +1260,49 @@ require_once 'header.php';
             });
         });
         
-        // Handle delete button clicks for allowances
+        // Handle delete button clicks for deductions
         document.querySelectorAll('.delete-btn').forEach(button => {
             button.addEventListener('click', function() {
-                const allowanceId = this.getAttribute('data-id');
+                const deductionId = this.getAttribute('data-id');
                 const name = this.getAttribute('data-name');
                 
-                document.getElementById('delete_allowance_name').textContent = name;
-                document.getElementById('delete_confirm_btn').href = `allowances.php?action=delete&id=${allowanceId}`;
+                document.getElementById('delete_deduction_name').textContent = name;
+                document.getElementById('delete_confirm_btn').href = `deductions.php?action=delete&id=${deductionId}`;
                 
                 document.getElementById('deleteModal').style.display = 'block';
             });
         });
         
-        // Handle edit button clicks for allowance types
+        // Handle edit button clicks for deduction types
         document.querySelectorAll('.edit-type-btn').forEach(button => {
             button.addEventListener('click', function() {
                 const typeId = this.getAttribute('data-id');
                 const typeName = this.getAttribute('data-type-name');
                 const description = this.getAttribute('data-description');
+                const calculationMethod = this.getAttribute('data-calculation-method');
                 const isActive = this.getAttribute('data-is-active') === '1';
                 
                 document.getElementById('edit_type_id').value = typeId;
                 document.getElementById('edit_type_name').value = typeName;
                 document.getElementById('edit_description').value = description;
+                document.getElementById('edit_calculation_method').value = calculationMethod;
                 document.getElementById('edit_is_active').checked = isActive;
+                
+                // Select the correct method option
+                selectEditMethod(calculationMethod);
                 
                 document.getElementById('editTypeModal').style.display = 'block';
             });
         });
         
-        // Handle delete button clicks for allowance types
+        // Handle delete button clicks for deduction types
         document.querySelectorAll('.delete-type-btn').forEach(button => {
             button.addEventListener('click', function() {
                 const typeId = this.getAttribute('data-id');
                 const name = this.getAttribute('data-name');
                 
                 document.getElementById('delete_type_name').textContent = name;
-                document.getElementById('delete_type_confirm_btn').href = `allowances.php?action=delete_allowance_type&id=${typeId}`;
+                document.getElementById('delete_type_confirm_btn').href = `deductions.php?action=delete_deduction_type&id=${typeId}`;
                 
                 document.getElementById('deleteTypeModal').style.display = 'block';
             });
@@ -1410,53 +1322,34 @@ require_once 'header.php';
             }
         });
         
-        // Open add modal for allowances
+        // Open add modal for deductions
         document.querySelector('[onclick*="addModal"]').addEventListener('click', function() {
             document.getElementById('addModal').style.display = 'block';
         });
         
-        // Open add modal for allowance types
+        // Open add modal for deduction types
         document.querySelector('[onclick*="addTypeModal"]').addEventListener('click', function() {
             document.getElementById('addTypeModal').style.display = 'block';
         });
         
-        // Function to update allowance amount based on employee and allowance type
-        function updateAllowanceAmount() {
-            const empId = document.getElementById('add_emp_id').value;
-            const allowanceTypeId = document.getElementById('add_allowance_type_id').value;
-            const amountDisplay = document.getElementById('add_amount_display');
-            
-            if (!empId || !allowanceTypeId) {
-                amountDisplay.value = '';
-                return;
-            }
-            
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'allowances.php', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.onload = function() {
-                if (this.status === 200) {
-                    const response = JSON.parse(this.responseText);
-                    if (response.success) {
-                        amountDisplay.value = '₦' + response.amount.toLocaleString();
-                    } else {
-                        amountDisplay.value = 'Error: ' + response.message;
-                    }
-                } else {
-                    amountDisplay.value = 'Error fetching amount';
-                }
-            };
-            xhr.send(`get_amount=1&emp_id=${encodeURIComponent(empId)}&allowance_type_id=${encodeURIComponent(allowanceTypeId)}`);
+        // Select calculation method
+        function selectMethod(method) {
+            document.querySelectorAll('.method-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            document.querySelector(`.method-option[data-method="${method}"]`).classList.add('selected');
+            document.getElementById('calculation_method').value = method;
         }
         
-        // Toggle amount input for allocation
-        function toggleAmountInput() {
-            const checkbox = document.getElementById('use_auto_amount');
-            const amountGroup = document.getElementById('amount_group');
-            amountGroup.style.display = checkbox.checked ? 'none' : 'block';
-            document.getElementById('alloc_amount').required = !checkbox.checked;
+        // Select edit calculation method
+        function selectEditMethod(method) {
+            document.querySelectorAll('#editTypeModal .method-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            document.querySelector(`#editTypeModal .method-option[data-method="${method}"]`).classList.add('selected');
+            document.getElementById('edit_calculation_method').value = method;
         }
-
+        
         // Toggle select all checkboxes
         function toggleSelectAll() {
             const selectAllCheckbox = document.getElementById('select_all');

@@ -60,6 +60,15 @@ function formatDate($date) {
     return date('M d, Y', strtotime($date));
 }
 
+function formatCurrency($amount) {
+    if ($amount === null || $amount === '') return 'N/A';
+    return number_format((float)$amount, 2);
+}
+
+function formatNullable($value) {
+    return $value === null || $value === '' ? 'N/A' : htmlspecialchars($value);
+}
+
 function getFlashMessage() {
     if (isset($_SESSION['flash_message'])) {
         $message = $_SESSION['flash_message'];
@@ -96,12 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_payroll']) && h
     $salary = $conn->real_escape_string($_POST['salary']);
     $bank_id = $conn->real_escape_string($_POST['bank_id']);
     $bank_account = $conn->real_escape_string($_POST['bank_account']);
-    $tax_bracket = $conn->real_escape_string($_POST['tax_bracket']);
-    $SHA_number = $conn->real_escape_string($_POST['SHA_number']);
-    $KRA_pin = $conn->real_escape_string($_POST['KRA_pin']);
-    $NSSF = $conn->real_escape_string($_POST['NSSF']);
-    $Gross_pay = $conn->real_escape_string($_POST['Gross_pay']);
-    $net_pay = $conn->real_escape_string($_POST['net_pay']);
+    $job_group = $conn->real_escape_string($_POST['job_group']);
+    $sha_number = $conn->real_escape_string($_POST['sha_number'] ?? '');
+    $kra_pin = $conn->real_escape_string($_POST['kra_pin'] ?? '');
+    $nssf = $conn->real_escape_string($_POST['nssf'] ?? '');
+    $gross_pay = $conn->real_escape_string($_POST['gross_pay'] ?? '');
+    $net_pay = $conn->real_escape_string($_POST['net_pay'] ?? '');
     
     $updateQuery = "UPDATE payroll SET 
                     employment_type = '$employment_type',
@@ -109,12 +118,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_payroll']) && h
                     salary = '$salary',
                     bank_id = '$bank_id',
                     bank_account = '$bank_account',
-                    tax_bracket = '$tax_bracket',
-                    SHA_number = '$SHA_number',
-                    KRA_pin = '$KRA_pin',
-                    NSSF = '$NSSF',
-                    Gross_pay = '$Gross_pay',
-                    net_pay = '$net_pay'
+                    job_group = '$job_group',
+                    SHA_number = NULLIF('$sha_number', ''),
+                    KRA_pin = NULLIF('$kra_pin', ''),
+                    NSSF = NULLIF('$nssf', ''),
+                    Gross_pay = NULLIF('$gross_pay', ''),
+                    net_pay = NULLIF('$net_pay', '')
                     WHERE payroll_id = '$payroll_id'";
     
     if ($conn->query($updateQuery)) {
@@ -142,8 +151,9 @@ if ($banksResult && $banksResult->num_rows > 0) {
 $editRecord = null;
 if (isset($_GET['action']) && $_GET['action'] == 'edit' && isset($_GET['id']) && hasPermission('hr_manager')) {
     $id = $conn->real_escape_string($_GET['id']);
-    $editQuery = "SELECT p.payroll_id, p.emp_id, p.employment_type, p.status, p.salary, p.bank_id, p.bank_account, p.tax_bracket, 
-                  p.SHA_number, p.KRA_pin, p.NSSF, p.Gross_pay, p.net_pay, e.first_name, e.last_name, b.bank_name 
+    $editQuery = "SELECT p.payroll_id, p.emp_id, p.employment_type, p.status, p.salary, p.bank_id, p.bank_account, p.job_group, 
+                         p.SHA_number, p.KRA_pin, p.NSSF, p.Gross_pay, p.net_pay, 
+                         e.first_name, e.last_name, b.bank_name 
                   FROM payroll p 
                   LEFT JOIN employees e ON p.emp_id = e.id 
                   LEFT JOIN banks b ON p.bank_id = b.bank_id
@@ -164,7 +174,7 @@ $rowsPerPage = isset($_GET['rows']) && in_array($_GET['rows'], [25, 50, 100, 250
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($page - 1) * $rowsPerPage;
 
-$sortBy = isset($_GET['sort']) && in_array($_GET['sort'], ['payroll_id', 'emp_id', 'employment_type', 'status']) ? $_GET['sort'] : 'payroll_id';
+$sortBy = isset($_GET['sort']) && in_array($_GET['sort'], ['payroll_id', 'emp_id', 'employment_type', 'status', 'SHA_number', 'KRA_pin', 'NSSF', 'Gross_pay', 'net_pay']) ? $_GET['sort'] : 'payroll_id';
 $sortOrder = isset($_GET['order']) && strtoupper($_GET['order']) === 'DESC' ? 'DESC' : 'ASC';
 $filter = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
 
@@ -182,8 +192,9 @@ $totalRecords = $countResult->fetch_assoc()['count'];
 $totalPages = ceil($totalRecords / $rowsPerPage);
 
 // Fetch payroll data with employee names and bank names
-$query = "SELECT p.payroll_id, p.emp_id, p.employment_type, p.status, p.salary, p.bank_id, p.bank_account, p.tax_bracket, 
-          p.SHA_number, p.KRA_pin, p.NSSF, p.Gross_pay, p.net_pay, e.first_name, e.last_name, b.bank_name 
+$query = "SELECT p.payroll_id, p.emp_id, p.employment_type, p.status, p.salary, p.bank_id, 
+                 p.bank_account, p.job_group, p.SHA_number, p.KRA_pin, p.NSSF, p.Gross_pay, p.net_pay, 
+                 e.first_name, e.last_name, b.bank_name 
           FROM payroll p 
           LEFT JOIN employees e ON p.emp_id = e.id 
           LEFT JOIN banks b ON p.bank_id = b.bank_id
@@ -544,14 +555,14 @@ $conn->close();
                                 <th>Name</th>
                                 <th>Employment Type</th>
                                 <th>Status</th>
-                                <th>Tax Bracket</th>
+                                <th>Job Group</th>
                                 <th>Salary</th>
                                 <th>Bank Name</th>
                                 <th>Bank Account</th>
                                 <th>SHA Number</th>
                                 <th>KRA Pin</th>
                                 <th>NSSF</th>
-                                <th>Gross pay</th>
+                                <th>Gross Pay</th>
                                 <th>Net Pay</th>
                                 <?php if (hasPermission('hr_manager')): ?>
                                 <th>Actions</th>
@@ -577,24 +588,25 @@ $conn->close();
                                             <?php echo $record['status'] ? ucwords($record['status']) : 'N/A'; ?>
                                         </span>
                                     </td>
-                                    <td><?php echo htmlspecialchars($record['tax_bracket'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['salary'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($record['job_group'] ?? 'N/A'); ?></td>
+                                    <td><?php echo formatCurrency($record['salary']); ?></td>
                                     <td><?php echo htmlspecialchars($record['bank_name'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['bank_account'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['SHA_number'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['KRA_pin'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['NSSF'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['Gross_pay'] ?? 'N/A'); ?></td>
-                                    <td><?php echo htmlspecialchars($record['net_pay'] ?? 'N/A'); ?></td>
+                                    <td><?php echo formatNullable($record['bank_account']); ?></td>
+                                    <td><?php echo formatNullable($record['SHA_number']); ?></td>
+                                    <td><?php echo formatNullable($record['KRA_pin']); ?></td>
+                                    <td><?php echo formatNullable($record['NSSF']); ?></td>
+                                    <td><?php echo formatCurrency($record['Gross_pay']); ?></td>
+                                    <td><?php echo formatCurrency($record['net_pay']); ?></td>
                                     <?php if (hasPermission('hr_manager')): ?>
                                     <td>
-                                        <button class="btn btn-sm btn-primary edit-btn" data-id="<?php echo $record['payroll_id']; ?>" 
+                                        <button class="btn btn-sm btn-primary edit-btn" 
+                                                data-id="<?php echo $record['payroll_id']; ?>" 
                                                 data-employment-type="<?php echo htmlspecialchars($record['employment_type'] ?? ''); ?>"
                                                 data-status="<?php echo htmlspecialchars($record['status'] ?? ''); ?>"
                                                 data-salary="<?php echo htmlspecialchars($record['salary'] ?? ''); ?>"
                                                 data-bank-id="<?php echo htmlspecialchars($record['bank_id'] ?? ''); ?>"
                                                 data-bank-account="<?php echo htmlspecialchars($record['bank_account'] ?? ''); ?>"
-                                                data-tax-bracket="<?php echo htmlspecialchars($record['tax_bracket'] ?? ''); ?>"
+                                                data-job-group="<?php echo htmlspecialchars($record['job_group'] ?? ''); ?>"
                                                 data-sha-number="<?php echo htmlspecialchars($record['SHA_number'] ?? ''); ?>"
                                                 data-kra-pin="<?php echo htmlspecialchars($record['KRA_pin'] ?? ''); ?>"
                                                 data-nssf="<?php echo htmlspecialchars($record['NSSF'] ?? ''); ?>"
@@ -603,7 +615,11 @@ $conn->close();
                                                 data-name="<?php echo htmlspecialchars($record['first_name'] . ' ' . $record['last_name']); ?>">
                                             Edit
                                         </button>
-                                        <button class="btn btn-sm btn-danger delete-btn" data-id="<?php echo $record['payroll_id']; ?>" data-name="<?php echo htmlspecialchars($record['first_name'] . ' ' . $record['last_name']); ?>">Delete</button>
+                                        <button class="btn btn-sm btn-danger delete-btn" 
+                                                data-id="<?php echo $record['payroll_id']; ?>" 
+                                                data-name="<?php echo htmlspecialchars($record['first_name'] . ' ' . $record['last_name']); ?>">
+                                            Delete
+                                        </button>
                                     </td>
                                     <?php endif; ?>
                                 </tr>
@@ -689,33 +705,33 @@ $conn->close();
                         </div>
                         
                         <div class="form-group">
-                            <label class="form-label" for="edit_tax_bracket">Tax Bracket</label>
-                            <input type="text" class="form-control" id="edit_tax_bracket" name="tax_bracket" required>
+                            <label class="form-label" for="edit_job_group">Job Group</label>
+                            <input type="text" class="form-control" id="edit_job_group" name="job_group" required>
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_sha_number">SHA Number</label>
-                            <input type="text" class="form-control" id="edit_sha_number" name="SHA_number" required>
+                            <input type="text" class="form-control" id="edit_sha_number" name="sha_number">
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_kra_pin">KRA Pin</label>
-                            <input type="text" class="form-control" id="edit_kra_pin" name="KRA_pin" required>
+                            <input type="text" class="form-control" id="edit_kra_pin" name="kra_pin">
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_nssf">NSSF</label>
-                            <input type="text" class="form-control" id="edit_nssf" name="NSSF" required>
+                            <input type="text" class="form-control" id="edit_nssf" name="nssf">
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_gross_pay">Gross Pay</label>
-                            <input type="number" step="0.01" class="form-control" id="edit_gross_pay" name="Gross_pay" required>
+                            <input type="number" step="0.01" class="form-control" id="edit_gross_pay" name="gross_pay">
                         </div>
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_net_pay">Net Pay</label>
-                            <input type="number" step="0.01" class="form-control" id="edit_net_pay" name="net_pay" required>
+                            <input type="number" step="0.01" class="form-control" id="edit_net_pay" name="net_pay">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -758,7 +774,7 @@ $conn->close();
                 const salary = this.getAttribute('data-salary');
                 const bankId = this.getAttribute('data-bank-id');
                 const bankAccount = this.getAttribute('data-bank-account');
-                const taxBracket = this.getAttribute('data-tax-bracket');
+                const jobGroup = this.getAttribute('data-job-group');
                 const shaNumber = this.getAttribute('data-sha-number');
                 const kraPin = this.getAttribute('data-kra-pin');
                 const nssf = this.getAttribute('data-nssf');
@@ -772,7 +788,7 @@ $conn->close();
                 document.getElementById('edit_salary').value = salary;
                 document.getElementById('edit_bank_id').value = bankId;
                 document.getElementById('edit_bank_account').value = bankAccount;
-                document.getElementById('edit_tax_bracket').value = taxBracket;
+                document.getElementById('edit_job_group').value = jobGroup;
                 document.getElementById('edit_sha_number').value = shaNumber;
                 document.getElementById('edit_kra_pin').value = kraPin;
                 document.getElementById('edit_nssf').value = nssf;

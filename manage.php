@@ -92,36 +92,82 @@ function getStatusDisplayName($status) {
 }
 
 // Function to update leave balance
-function updateLeaveBalance($conn, $employeeId, $leaveTypeId, $days) {
+function updateLeaveBalance($conn, $employeeId, $leaveTypeId, $days, $is_add = false) {
     try {
-        // Start transaction
         $conn->begin_transaction();
-        
-        // Update the employee's leave balance for current financial year
-        $stmt = $conn->prepare("
-            UPDATE employee_leave_balances 
-            SET 
-                used_days = used_days + ?,
-                remaining_days = remaining_days - ?,
-                updated_at = NOW()
-            WHERE 
-                employee_id = ? 
-                AND leave_type_id = ?
-                AND financial_year_id = (
-                    SELECT MAX(financial_year_id) 
-                    FROM employee_leave_balances 
-                    WHERE employee_id = ?
-                )
-        ");
-        $stmt->bind_param("iiiii", $days, $days, $employeeId, $leaveTypeId, $employeeId);
+
+        // Get the leave type info for max_days_per_year
+        $typeStmt = $conn->prepare("SELECT max_days_per_year FROM leave_types WHERE id = ?");
+        $typeStmt->bind_param("i", $leaveTypeId);
+        $typeStmt->execute();
+        $typeResult = $typeStmt->get_result();
+        $leaveTypeInfo = $typeResult->fetch_assoc();
+
+        $maxDays = $leaveTypeInfo['max_days_per_year'];
+
+        if ($is_add) {
+            // For adding (claim a day), increase remaining_days only
+            $stmt = $conn->prepare("
+                UPDATE employee_leave_balances 
+                SET 
+                    remaining_days = remaining_days + ?,
+                    updated_at = NOW()
+                WHERE 
+                    employee_id = ? 
+                    AND leave_type_id = ?
+                    AND financial_year_id = (
+                        SELECT MAX(financial_year_id) 
+                        FROM employee_leave_balances 
+                        WHERE employee_id = ?
+                    )
+            ");
+            $stmt->bind_param("diii", $days, $employeeId, $leaveTypeId, $employeeId);
+        } else {
+            // For deduction
+            if ($maxDays === NULL) {
+                // Unlimited, increase used_days only, remaining unchanged
+                $stmt = $conn->prepare("
+                    UPDATE employee_leave_balances 
+                    SET 
+                        used_days = used_days + ?,
+                        updated_at = NOW()
+                    WHERE 
+                        employee_id = ? 
+                        AND leave_type_id = ?
+                    AND financial_year_id = (
+                        SELECT MAX(financial_year_id) 
+                        FROM employee_leave_balances 
+                        WHERE employee_id = ?
+                    )
+                ");
+                $stmt->bind_param("diii", $days, $employeeId, $leaveTypeId, $employeeId);
+            } else {
+                // Limited, increase used_days, decrease remaining_days
+                $stmt = $conn->prepare("
+                    UPDATE employee_leave_balances 
+                    SET 
+                        used_days = used_days + ?,
+                        remaining_days = remaining_days - ?,
+                        updated_at = NOW()
+                    WHERE 
+                        employee_id = ? 
+                        AND leave_type_id = ?
+                        AND financial_year_id = (
+                            SELECT MAX(financial_year_id) 
+                            FROM employee_leave_balances 
+                            WHERE employee_id = ?
+                        )
+                ");
+                $stmt->bind_param("ddiii", $days, $days, $employeeId, $leaveTypeId, $employeeId);
+            }
+        }
         $stmt->execute();
-        
-        // Check if any rows were affected
+
         if ($stmt->affected_rows === 0) {
             throw new Exception("Failed to update leave balance. No matching record found.");
         }
-        
-        // Get the updated balance to check if it's negative
+
+        // Get the updated balance
         $balanceStmt = $conn->prepare("
             SELECT remaining_days 
             FROM employee_leave_balances 
@@ -138,12 +184,14 @@ function updateLeaveBalance($conn, $employeeId, $leaveTypeId, $days) {
         $balanceStmt->execute();
         $result = $balanceStmt->get_result();
         $balance = $result->fetch_assoc();
-        
+
+        $remaining = $balance['remaining_days'] ?? 'Unlimited';
+
         $conn->commit();
-        
+
         return [
             'success' => true,
-            'remaining_days' => $balance['remaining_days']
+            'remaining_days' => $remaining
         ];
     } catch (Exception $e) {
         $conn->rollback();
@@ -176,25 +224,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
     if (isset($_GET['action'])) {
         $action = $_GET['action'];
         $leaveId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-        
+
         // SECTION HEAD APPROVAL (for employee applications)
         if ($action === 'section_head_approve' && hasPermission('section_head')) {
             try {
                 $conn->begin_transaction();
-                
+
                 // Get leave application
                 $stmt = $conn->prepare("SELECT * FROM leave_applications WHERE id = ?");
                 $stmt->bind_param("i", $leaveId);
                 $stmt->execute();
                 $application = $stmt->get_result()->fetch_assoc();
-                
+
+                if ($application['leave_type_id'] == 9) {
+                    throw new Exception("Claim a day leaves can only be approved by the HR manager.");
+                }
+
                 // Get approver employee record
                 $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
                 $stmt = $conn->prepare($userEmpQuery);
                 $stmt->bind_param("s", $user['id']);
                 $stmt->execute();
                 $userEmpRecord = $stmt->get_result()->fetch_assoc();
-                
+
                 // Check if application is in correct status and approver has authority
                 if ($userEmpRecord && $application && $application['status'] === 'pending_section_head') {
                     // For employee applications, forward to department head
@@ -206,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                         WHERE id = ?");
                     $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
                     $stmt->execute();
-                    
+
                     $conn->commit();
                     $_SESSION['flash_message'] = "Leave application approved by section head. Sent to department head.";
                     $_SESSION['flash_type'] = "success";
@@ -223,33 +275,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
             header("Location: manage.php");
             exit();
         }
-        
+
         // DEPARTMENT HEAD APPROVAL (final approval)
         elseif ($action === 'dept_head_approve' && hasPermission('dept_head')) {
             try {
                 $conn->begin_transaction();
-                
+
                 // Get leave application
                 $stmt = $conn->prepare("SELECT * FROM leave_applications WHERE id = ?");
                 $stmt->bind_param("i", $leaveId);
                 $stmt->execute();
                 $application = $stmt->get_result()->fetch_assoc();
-                
+
                 if (!$application) {
                     throw new Exception("Leave application not found");
                 }
-                
+
+                if ($application['leave_type_id'] == 9) {
+                    throw new Exception("Claim a day leaves can only be approved by the HR manager.");
+                }
+
                 // Get approver employee record
                 $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
                 $stmt = $conn->prepare($userEmpQuery);
                 $stmt->bind_param("s", $user['id']);
                 $stmt->execute();
                 $userEmpRecord = $stmt->get_result()->fetch_assoc();
-                
+
                 // Check if application is in correct status
                 if ($userEmpRecord && $application && 
                     ($application['status'] === 'pending_dept_head' || $application['status'] === 'pending_section_head')) {
-                    
+
                     // Update the leave application status to approved
                     $stmt = $conn->prepare("UPDATE leave_applications SET 
                         status = 'approved', 
@@ -259,22 +315,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                         WHERE id = ?");
                     $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
                     $stmt->execute();
-                    
-                    // Update the employee's leave balance
-                    $balanceResult = updateLeaveBalance($conn, $application['employee_id'], $application['leave_type_id'], $application['days_requested']);
-                    
-                    if (!$balanceResult['success']) {
-                        throw new Exception($balanceResult['message']);
+
+                    // Determine if balance update is needed
+                    $typeStmt = $conn->prepare("SELECT deducted_from_annual, max_days_per_year, id FROM leave_types WHERE id = ?");
+                    $typeStmt->bind_param("i", $application['leave_type_id']);
+                    $typeStmt->execute();
+                    $leaveType = $typeStmt->get_result()->fetch_assoc();
+
+                    $target_type_id = $application['leave_type_id'];
+                    if ($leaveType['deducted_from_annual'] == 1) {
+                        $target_type_id = 1; // Annual leave
                     }
-                    
+
+                    $is_add = ($application['leave_type_id'] == 9);
+                    $update_needed = true;
+
+                    if ($application['leave_type_id'] == 8) { // Leave of absence, no deduction
+                        $update_needed = false;
+                    }
+
+                    if ($update_needed) {
+                        // Update the employee's leave balance
+                        $balanceResult = updateLeaveBalance($conn, $application['employee_id'], $target_type_id, $application['days_requested'], $is_add);
+
+                        if (!$balanceResult['success']) {
+                            throw new Exception($balanceResult['message']);
+                        }
+
+                        // Check if balance went negative (only if numeric and not unlimited)
+                        $message = "Leave application approved successfully.";
+                        if (is_numeric($balanceResult['remaining_days']) && $balanceResult['remaining_days'] < 0) {
+                            $message .= " Note: Employee has exceeded their allocated leave days (Remaining: " . $balanceResult['remaining_days'] . ").";
+                        }
+                    } else {
+                        $message = "Leave application approved successfully. No balance deduction required.";
+                    }
+
                     $conn->commit();
-                    
-                    // Check if balance went negative
-                    $message = "Leave application approved successfully.";
-                    if ($balanceResult['remaining_days'] < 0) {
-                        $message .= " Note: Employee has exceeded their allocated leave days (Remaining: " . $balanceResult['remaining_days'] . ").";
-                    }
-                    
+
                     $_SESSION['flash_message'] = $message;
                     $_SESSION['flash_type'] = "success";
                 } else {
@@ -290,29 +368,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
             header("Location: manage.php");
             exit();
         }
-        
+
         // MANAGING DIRECTOR APPROVAL (for special cases)
         elseif ($action === 'managing_director_approve' && hasPermission('managing_director')) {
             try {
                 $conn->begin_transaction();
-                
+
                 // Get the leave application details
                 $stmt = $conn->prepare("SELECT * FROM leave_applications WHERE id = ?");
                 $stmt->bind_param("i", $leaveId);
                 $stmt->execute();
                 $application = $stmt->get_result()->fetch_assoc();
-                
+
                 if (!$application) {
                     throw new Exception("Leave application not found");
                 }
-                
+
+                if ($application['leave_type_id'] == 9) {
+                    throw new Exception("Claim a day leaves can only be approved by the HR manager.");
+                }
+
                 // Get approver employee record
                 $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
                 $stmt = $conn->prepare($userEmpQuery);
                 $stmt->bind_param("s", $user['id']);
                 $stmt->execute();
                 $userEmpRecord = $stmt->get_result()->fetch_assoc();
-                
+
                 // Update the leave application status
                 $stmt = $conn->prepare("UPDATE leave_applications SET 
                     status = 'approved', 
@@ -321,22 +403,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                     WHERE id = ?");
                 $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
                 $stmt->execute();
-                
-                // Update the employee's leave balance
-                $balanceResult = updateLeaveBalance($conn, $application['employee_id'], $application['leave_type_id'], $application['days_requested']);
-                
-                if (!$balanceResult['success']) {
-                    throw new Exception($balanceResult['message']);
+
+                // Determine if balance update is needed
+                $typeStmt = $conn->prepare("SELECT deducted_from_annual, max_days_per_year, id FROM leave_types WHERE id = ?");
+                $typeStmt->bind_param("i", $application['leave_type_id']);
+                $typeStmt->execute();
+                $leaveType = $typeStmt->get_result()->fetch_assoc();
+
+                $target_type_id = $application['leave_type_id'];
+                if ($leaveType['deducted_from_annual'] == 1) {
+                    $target_type_id = 1; // Annual leave
                 }
-                
+
+                $is_add = ($application['leave_type_id'] == 9);
+                $update_needed = true;
+
+                if ($application['leave_type_id'] == 8) { // Leave of absence, no deduction
+                    $update_needed = false;
+                }
+
+                if ($update_needed) {
+                    // Update the employee's leave balance
+                    $balanceResult = updateLeaveBalance($conn, $application['employee_id'], $target_type_id, $application['days_requested'], $is_add);
+
+                    if (!$balanceResult['success']) {
+                        throw new Exception($balanceResult['message']);
+                    }
+
+                    // Check if balance went negative (only if numeric and not unlimited)
+                    $message = "Leave approved successfully.";
+                    if (is_numeric($balanceResult['remaining_days']) && $balanceResult['remaining_days'] < 0) {
+                        $message .= " Note: Employee has exceeded their allocated leave days (Remaining: " . $balanceResult['remaining_days'] . ").";
+                    }
+                } else {
+                    $message = "Leave approved successfully. No balance deduction required.";
+                }
+
                 $conn->commit();
-                
-                // Check if balance went negative
-                $message = "Leave approved successfully.";
-                if ($balanceResult['remaining_days'] < 0) {
-                    $message .= " Note: Employee has exceeded their allocated leave days (Remaining: " . $balanceResult['remaining_days'] . ").";
-                }
-                
+
                 $_SESSION['flash_message'] = $message;
                 $_SESSION['flash_type'] = "success";
             } catch (Exception $e) {
@@ -347,29 +451,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
             header("Location: manage.php");
             exit();
         }
-        
-        // HR MANAGER APPROVAL (can approve any application)
+
+        // HR MANAGER APPROVAL (can approve any application except their own)
         elseif ($action === 'hr_approve' && hasPermission('hr_manager')) {
             try {
                 $conn->begin_transaction();
-                
+
                 // Get the leave application details
                 $stmt = $conn->prepare("SELECT * FROM leave_applications WHERE id = ?");
                 $stmt->bind_param("i", $leaveId);
                 $stmt->execute();
                 $application = $stmt->get_result()->fetch_assoc();
-                
+
                 if (!$application) {
                     throw new Exception("Leave application not found");
                 }
-                
-                // Get approver employee record
+
+                // Check if this is the HR manager's own application
                 $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
                 $stmt = $conn->prepare($userEmpQuery);
                 $stmt->bind_param("s", $user['id']);
                 $stmt->execute();
                 $userEmpRecord = $stmt->get_result()->fetch_assoc();
                 
+                // Prevent HR from approving their own leave
+                if ($userEmpRecord && $userEmpRecord['id'] == $application['employee_id']) {
+                    $conn->rollback();
+                    $_SESSION['flash_message'] = "You cannot approve your own leave application. Please contact the Managing Director for approval.";
+                    $_SESSION['flash_type'] = "danger";
+                    header("Location: manage.php");
+                    exit();
+                }
+
+                // Get approver employee record
+                $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
+                $stmt = $conn->prepare($userEmpQuery);
+                $stmt->bind_param("s", $user['id']);
+                $stmt->execute();
+                $userEmpRecord = $stmt->get_result()->fetch_assoc();
+
                 // Update the leave application status
                 $stmt = $conn->prepare("UPDATE leave_applications SET 
                     status = 'approved', 
@@ -378,22 +498,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                     WHERE id = ?");
                 $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
                 $stmt->execute();
-                
-                // Update the employee's leave balance
-                $balanceResult = updateLeaveBalance($conn, $application['employee_id'], $application['leave_type_id'], $application['days_requested']);
-                
-                if (!$balanceResult['success']) {
-                    throw new Exception($balanceResult['message']);
+
+                // Determine if balance update is needed
+                $typeStmt = $conn->prepare("SELECT deducted_from_annual, max_days_per_year, id FROM leave_types WHERE id = ?");
+                $typeStmt->bind_param("i", $application['leave_type_id']);
+                $typeStmt->execute();
+                $leaveType = $typeStmt->get_result()->fetch_assoc();
+
+                $target_type_id = $application['leave_type_id'];
+                if ($leaveType['deducted_from_annual'] == 1) {
+                    $target_type_id = 1; // Annual leave
                 }
-                
+
+                $is_add = ($application['leave_type_id'] == 9);
+                $update_needed = true;
+
+                if ($application['leave_type_id'] == 8) { // Leave of absence, no deduction
+                    $update_needed = false;
+                }
+
+                if ($update_needed) {
+                    // Update the employee's leave balance
+                    $balanceResult = updateLeaveBalance($conn, $application['employee_id'], $target_type_id, $application['days_requested'], $is_add);
+
+                    if (!$balanceResult['success']) {
+                        throw new Exception($balanceResult['message']);
+                    }
+
+                    // Check if balance went negative (only if numeric and not unlimited)
+                    $message = "Leave approved successfully by HR.";
+                    if (is_numeric($balanceResult['remaining_days']) && $balanceResult['remaining_days'] < 0) {
+                        $message .= " Note: Employee has exceeded their allocated leave days (Remaining: " . $balanceResult['remaining_days'] . ").";
+                    }
+                } else {
+                    $message = "Leave approved successfully by HR. No balance deduction required.";
+                }
+
                 $conn->commit();
-                
-                // Check if balance went negative
-                $message = "Leave approved successfully by HR.";
-                if ($balanceResult['remaining_days'] < 0) {
-                    $message .= " Note: Employee has exceeded their allocated leave days (Remaining: " . $balanceResult['remaining_days'] . ").";
-                }
-                
+
                 $_SESSION['flash_message'] = $message;
                 $_SESSION['flash_type'] = "success";
             } catch (Exception $e) {
@@ -404,19 +546,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
             header("Location: manage.php");
             exit();
         }
-        
-        // REJECTION HANDLER (any approver can reject)
+
+        // REJECTION HANDLER (any approver can reject, except HR cannot reject their own)
         elseif (($action === 'reject_leave') && 
                (hasPermission('section_head') || hasPermission('dept_head') || 
                 hasPermission('managing_director') || hasPermission('hr_manager'))) {
             try {
+                // Get the leave application details first
+                $stmt = $conn->prepare("SELECT * FROM leave_applications WHERE id = ?");
+                $stmt->bind_param("i", $leaveId);
+                $stmt->execute();
+                $application = $stmt->get_result()->fetch_assoc();
+
+                if (!$application) {
+                    throw new Exception("Leave application not found");
+                }
+
                 // Get approver employee record
                 $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
                 $stmt = $conn->prepare($userEmpQuery);
                 $stmt->bind_param("s", $user['id']);
                 $stmt->execute();
                 $userEmpRecord = $stmt->get_result()->fetch_assoc();
-                
+
+                // Prevent HR from rejecting their own leave
+                if (hasPermission('hr_manager') && $userEmpRecord && $userEmpRecord['id'] == $application['employee_id']) {
+                    $_SESSION['flash_message'] = "You cannot reject your own leave application. Please contact the Managing Director.";
+                    $_SESSION['flash_type'] = "danger";
+                    header("Location: manage.php");
+                    exit();
+                }
+
                 // Set rejection fields based on who is rejecting
                 $rejectedByField = '';
                 $timestampField = '';
@@ -433,7 +593,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                     $rejectedByField = 'section_head_approved_by';
                     $timestampField = 'section_head_approved_at';
                 }
-                
+
                 $stmt = $conn->prepare("UPDATE leave_applications SET 
                     status = 'rejected', 
                     $rejectedByField = ?, 
@@ -441,7 +601,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                     WHERE id = ?");
                 $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
                 $stmt->execute();
-                
+
                 $_SESSION['flash_message'] = "Leave rejected successfully.";
                 $_SESSION['flash_type'] = "success";
             } catch (Exception $e) {
@@ -460,7 +620,7 @@ try {
     if ($user['role'] === 'section_head' && $userEmployee) {
         // Section heads see applications from their section employees (status: pending_section_head)
         $sectionId = (int)$userEmployee['section_id'];
-        
+
         $pendingQuery = "SELECT la.*, e.employee_id as emp_id, e.first_name, e.last_name,
                          lt.name as leave_type_name, d.name as department_name, s.name as section_name
                          FROM leave_applications la
@@ -482,7 +642,7 @@ try {
         // 1. Applications from their department employees that have been approved by section heads (status: pending_dept_head)
         // 2. Applications from section heads in their department (status: pending_dept_head)
         $deptId = (int)$userEmployee['department_id'];
-        
+
         $pendingQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
                         lt.name as leave_type_name, d.name as department_name, s.name as section_name
                         FROM leave_applications la
@@ -682,13 +842,14 @@ try {
                     </div>
                 <?php endif; ?>
 
-                <div class="leave-tabs">
+                 <div class="leave-tabs">
+                      <a href="strategic_plan.php" class="leave-tab active">Strategic plan</a>
                     <a href="leave_management.php" class="leave-tab">Apply Leave</a>
                     <?php if (in_array($user['role'], ['hr_manager', 'dept_head', 'section_head', 'manager', 'managing_director','super_admin'])): ?>
-                    <a href="manage.php" class="leave-tab active">Manage Leave</a>
+                    <a href="manage.php" class="leave-tab">Manage Leave</a>
                     <?php endif; ?>
-                    <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing_director'])): ?>
-                    <a href="history.php" class="leave-tab">Leave History</a>
+                    <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing director'])): ?>
+                    <a href="history.php" class="leave-tab ">Leave History</a>
                     <a href="holidays.php" class="leave-tab">Holidays</a>
                     <?php endif; ?>
                     <a href="profile.php" class="leave-tab">My Leave Profile</a>
@@ -757,13 +918,23 @@ try {
                                                 <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
                                                    class="btn btn-danger btn-sm"
                                                    onclick="return confirm('Reject this leave application?')">Reject</a>
-                                            <?php elseif ($user['role'] === 'hr_manager'): ?>
-                                                <a href="manage.php?action=hr_approve&id=<?php echo $leave['id']; ?>"
-                                                   class="btn btn-success btn-sm"
-                                                   onclick="return confirm('Approve this leave application as HR?')">HR Approve</a>
-                                                <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
-                                                   class="btn btn-danger btn-sm"
-                                                   onclick="return confirm('Reject this leave application?')">Reject</a>
+                                            <?php elseif ($user['role'] === 'hr_manager'): 
+                                                // Check if this is the HR manager's own application
+                                                $isOwnApplication = false;
+                                                if ($userEmployee && $userEmployee['id'] == $leave['employee_id']) {
+                                                    $isOwnApplication = true;
+                                                }
+                                                
+                                                if (!$isOwnApplication): ?>
+                                                    <a href="manage.php?action=hr_approve&id=<?php echo $leave['id']; ?>"
+                                                       class="btn btn-success btn-sm"
+                                                       onclick="return confirm('Approve this leave application as HR?')">HR Approve</a>
+                                                    <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
+                                                       class="btn btn-danger btn-sm"
+                                                       onclick="return confirm('Reject this leave application?')">Reject</a>
+                                                <?php else: ?>
+                                                    <span class="text-muted">Pending MD Approval</span>
+                                                <?php endif; ?>
                                             <?php else: ?>
                                                 <span class="text-muted">No actions available</span>
                                             <?php endif; ?>

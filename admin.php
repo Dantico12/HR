@@ -22,7 +22,7 @@ $user = [
 function hasPermission($requiredRole) {
     $userRole = $_SESSION['user_role'] ?? 'guest';
     
-    // Permission hierarchy - Fixed variable name from $role to $roles
+    // Permission hierarchy
     $roles = [
         'managing_director' => 6,
         'super_admin' => 5,
@@ -303,19 +303,17 @@ function allocateLeaveToAllEmployees($mysqli, $financial_year_id) {
         }
 
         // Define leave allocation rules
-        // Define leave allocation rules
-$leave_rules = [
-    // Annual Leave - only for permanent employees
-    ['leave_type_id' => 1, 'days' => 30,  'gender' => 'all',    'employment' => 'permanent'],
-    // Short Leave - for all employees including contract
-    ['leave_type_id' => 6, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],
-    // Other leave types...
-    ['leave_type_id' => 5, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],       // Study
-    ['leave_type_id' => 2, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],       // Sick
-    ['leave_type_id' => 3, 'days' => 120, 'gender' => 'female', 'employment' => 'all'],       // Maternity
-    ['leave_type_id' => 4, 'days' => 10,  'gender' => 'male',   'employment' => 'all'],       // Paternity
-    ['leave_type_id' => 7, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],       // Compassionate
-];
+        $leave_rules = [
+            ['leave_type_id' => 1, 'days' => 30,  'gender' => 'all',    'employment' => 'permanent'],
+            ['leave_type_id' => 6, 'days' => 0,  'gender' => 'all',    'employment' => 'all'],
+            ['leave_type_id' => 5, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],
+            ['leave_type_id' => 2, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],
+            ['leave_type_id' => 3, 'days' => 120, 'gender' => 'female', 'employment' => 'all'],
+            ['leave_type_id' => 4, 'days' => 10,  'gender' => 'male',   'employment' => 'all'],
+            ['leave_type_id' => 7, 'days' => 10,  'gender' => 'all',    'employment' => 'all'],
+            ['leave_type_id' => 9, 'days' => 0,  'gender' => 'all',    'employment' => 'all'],
+            ['leave_type_id' => 8, 'days' => 0,  'gender' => 'all',    'employment' => 'all'],
+        ];
 
         // Get all active employees with better debugging
         $employees_query = "SELECT id, gender, employment_type, CONCAT(first_name, ' ', last_name) as full_name 
@@ -392,18 +390,13 @@ $leave_rules = [
                 // Special handling for annual leave (carry over + new allocation)
                 if ($rule['leave_type_id'] == 1 && $employment === 'permanent') {
                     $prev_balance = $prev_balances[$emp_id] ?? 0;
-                    
-                    // Only allocate 30 days, but total available = previous balance + 30
                     $allocated_days = 30; 
                     $remaining_days = $prev_balance + $allocated_days;
                     $total_days = $remaining_days;
-                    
                     $debug_info[] = "  Rule {$rule_index}: Annual leave with carryover - New Allocation: 30, Carryover: {$prev_balance}, Total Available: {$remaining_days}";
                 } else {
-                    // For all other leave types, allocated = total = remaining
                     $total_days = $allocated_days;
                     $remaining_days = $allocated_days;
-                    
                     $debug_info[] = "  Rule {$rule_index}: Standard allocation - {$allocated_days} days";
                 }
 
@@ -425,8 +418,6 @@ $leave_rules = [
         $mysqli->commit();
         
         $debug_info[] = "SUMMARY: Processed {$employee_count} employees, {$rule_applications} rule applications, {$allocated_count} successful allocations";
-        
-        // Log debug info
         error_log("Leave Allocation Debug Info:\n" . implode("\n", $debug_info));
         
         return $allocated_count;
@@ -459,8 +450,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (!$fy_status['can_create']) {
                 $error = $fy_status['reason'];
-                
-                // Add more context to the error message
                 if (isset($fy_status['days_until_creation'])) {
                     $error .= ' (Available in ' . ceil($fy_status['days_until_creation']) . ' days)';
                 }
@@ -509,43 +498,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $allocated_count = allocateLeaveToAllEmployees($mysqli, $fy_id);
                 $success = "Debug allocation completed. {$allocated_count} allocations made. Check error log for details.";
             }
-        }
-        // User management actions (existing code...)
-        elseif ($action === 'add_user') {
-            $first_name = sanitizeInput($_POST['first_name']);
-            $last_name = sanitizeInput($_POST['last_name']);
-            $email = sanitizeInput($_POST['email']);
-            $password = $_POST['password'];
-            $role = $_POST['role'];
-            $phone = sanitizeInput($_POST['phone']);
-            $address = sanitizeInput($_POST['address']);
-            $employee_id = sanitizeInput($_POST['employee_id']);
+        } elseif ($action === 'edit_user') {
+            $user_id = sanitizeInput($_POST['id']);
             
-            try {
-                // Check if email already exists
-                $stmt = $mysqli->prepare("SELECT id FROM users WHERE email = ?");
-                $stmt->bind_param("s", $email);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                if ($result->fetch_assoc()) {
-                    $error = 'Email already exists in the system.';
-                } else {
-                    // Generate unique user ID based on role
-                    $rolePrefix = substr($role, 0, 3);
-                    $timestamp = time();
-                    $userId = $rolePrefix . '-' . $timestamp;
-                    
-                    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-                    $stmt = $mysqli->prepare("INSERT INTO users (id, first_name, last_name, email, password, role, phone, address, employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
-                    $stmt->bind_param("sssssssss", $userId, $first_name, $last_name, $email, $hashedPassword, $role, $phone, $address, $employee_id);
-                    $stmt->execute();
-                    redirectWithMessage('admin.php?tab=users', 'User created successfully!', 'success');
+            // Check if user exists
+            $stmt = $mysqli->prepare("SELECT * FROM users WHERE id = ?");
+            $stmt->bind_param("s", $user_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if (!$result->fetch_assoc()) {
+                $error = 'User not found.';
+            } else {
+                try {
+                    if (hasPermission('super_admin')) {
+                        // Super admin can only update password
+                        if (!empty($_POST['password'])) {
+                            $password = $_POST['password'];
+                            if (strlen($password) < 6) {
+                                $error = 'Password must be at least 6 characters long.';
+                            } else {
+                                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                                $stmt = $mysqli->prepare("UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?");
+                                $stmt->bind_param("ss", $hashedPassword, $user_id);
+                                if ($stmt->execute()) {
+                                    redirectWithMessage('admin.php?tab=users', 'Password updated successfully!', 'success');
+                                } else {
+                                    $error = 'Error updating password: ' . $mysqli->error;
+                                }
+                            }
+                        } else {
+                            $error = 'Password field is required for super admin.';
+                        }
+                    } elseif (hasPermission('hr_manager')) {
+                        // HR manager can update all fields
+                        $first_name = sanitizeInput($_POST['first_name']);
+                        $last_name = sanitizeInput($_POST['last_name']);
+                        $email = sanitizeInput($_POST['email']);
+                        $role = sanitizeInput($_POST['role']);
+                        $phone = sanitizeInput($_POST['phone']);
+                        $address = sanitizeInput($_POST['address']);
+                        $employee_id = sanitizeInput($_POST['employee_id']);
+
+                        // Validate email uniqueness (excluding current user)
+                        $stmt = $mysqli->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+                        $stmt->bind_param("ss", $email, $user_id);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        if ($result->fetch_assoc()) {
+                            $error = 'Email already exists in the system.';
+                        } else {
+                            // Prepare update query
+                            $query = "UPDATE users SET first_name = ?, last_name = ?, email = ?, role = ?, phone = ?, address = ?, updated_at = NOW()";
+                            $params = [$first_name, $last_name, $email, $role, $phone, $address];
+                            $types = "ssssss";
+
+                            // Include password update if provided
+                            if (!empty($_POST['password'])) {
+                                $password = $_POST['password'];
+                                if (strlen($password) < 6) {
+                                    $error = 'Password must be at least 6 characters long.';
+                                } else {
+                                    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+                                    $query .= ", password = ?";
+                                    $params[] = $hashedPassword;
+                                    $types .= "s";
+                                }
+                            }
+
+                            // Complete the query
+                            $query .= " WHERE id = ?";
+                            $params[] = $user_id;
+                            $types .= "s";
+
+                            $stmt = $mysqli->prepare($query);
+                            $stmt->bind_param($types, ...$params);
+                            if ($stmt->execute()) {
+                                redirectWithMessage('admin.php?tab=users', 'User updated successfully!', 'success');
+                            } else {
+                                $error = 'Error updating user: ' . $mysqli->error;
+                            }
+                        }
+                    } else {
+                        $error = 'Insufficient permissions to edit users.';
+                    }
+                } catch (Exception $e) {
+                    $error = 'Error updating user: ' . $e->getMessage();
                 }
-            } catch (Exception $e) {
-                $error = 'Error creating user: ' . $mysqli->error;
             }
         }
-        // ... other user management actions remain the same
     }
 }
 
@@ -667,7 +707,6 @@ function getRoleBadge($role) {
         
         <!-- Main Content Area -->
         <div class="main-content">
-            
             <!-- Content -->
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
@@ -675,7 +714,6 @@ function getRoleBadge($role) {
                         <?php echo htmlspecialchars($flash['message']); ?>
                     </div>
                 <?php endif; ?>
-                
                 
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
@@ -690,12 +728,11 @@ function getRoleBadge($role) {
                     <a href="admin.php?tab=users" class="leave-tab <?php echo $tab === 'users' ? 'active' : ''; ?>">Users</a>
                     <?php endif; ?>
                     <a href="admin.php?tab=financial" class="leave-tab <?php echo $tab === 'financial' ? 'active' : ''; ?>">Financial Year</a>
-                                </div>
+                </div>
 
                 <?php if ($tab === 'users'): ?>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="margin-bottom: 20px;">
                     <h2>System Users (<?php echo count($users); ?>)</h2>
-                    <button onclick="showAddUserModal()" class="btn btn-success">Add New User</button>
                 </div>
                 <div class="table-container">
                     <table class="table">
@@ -800,7 +837,7 @@ function getRoleBadge($role) {
                                                    $start = new DateTime($fy_status['next_fy']['start_date']);
                                                    $end = new DateTime($fy_status['next_fy']['end_date']);
                                                    $interval = $start->diff($end);
-                                                   $days = $interval->days + 1; // +1 to include both start and end dates
+                                                   $days = $interval->days + 1;
                                                    echo $fy_status['next_fy']['year_name'] . " (" . $days . " days)";
                                                } else {
                                                    echo 'Not available';
@@ -878,78 +915,6 @@ function getRoleBadge($role) {
         </div>
     </div>
 
-    <!-- User Management Modals -->
-    <!-- Add User Modal -->
-    <div id="addUserModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New User</h3>
-                <span class="close" onclick="hideAddUserModal()">&times;</span>
-            </div>
-            <form method="POST" action="">
-                <input type="hidden" name="action" value="add_user">
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="first_name">First Name</label>
-                        <input type="text" class="form-control" id="first_name" name="first_name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="last_name">Last Name</label>
-                        <input type="text" class="form-control" id="last_name" name="last_name" required>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required minlength="6">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="role">Role</label>
-                        <select class="form-control" id="role" name="role" required>
-                            <option value="">Select Role</option>
-                            <option value="super_admin">Super Admin</option>
-                            <option value="hr_manager">HR Manager</option>
-                            <option value="dept_head">Department Head</option>
-                            <option value="section_head">Section Head</option>
-                            <option value="manager">Manager</option>
-                            <option value="employee">Employee</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="phone">Phone</label>
-                        <input type="text" class="form-control" id="phone" name="phone">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="employee_id">Employee ID</label>
-                        <input type="text" class="form-control" id="employee_id" name="employee_id">
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="address">Address</label>
-                    <textarea class="form-control" id="address" name="address" rows="3"></textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-success">Create User</button>
-                    <button type="button" class="btn btn-secondary" onclick="hideAddUserModal()">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Edit User Modal -->
     <div id="editUserModal" class="modal">
         <div class="modal-content">
@@ -960,60 +925,70 @@ function getRoleBadge($role) {
             <form method="POST" action="">
                 <input type="hidden" name="action" value="edit_user">
                 <input type="hidden" id="edit_user_id" name="id">
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit_first_name">First Name</label>
-                        <input type="text" class="form-control" id="edit_first_name" name="first_name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit_last_name">Last Name</label>
-                        <input type="text" class="form-control" id="edit_last_name" name="last_name" required>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit_email">Email</label>
-                        <input type="email" class="form-control" id="edit_email" name="email" required>
-                    </div>
+
+                <?php if ($user['role'] === 'super_admin'): ?>
+                    <!-- Super Admin: Only password field -->
                     <div class="form-group">
                         <label for="edit_password">New Password</label>
-                        <input type="password" class="form-control" id="edit_password" name="password" placeholder="Leave blank to keep current password">
-                        <small class="form-text text-muted">Leave blank to keep current password</small>
+                        <input type="password" class="form-control" id="edit_password" name="password" required minlength="6">
+                        <small class="form-text text-muted">Enter a new password (minimum 6 characters).</small>
                     </div>
-                </div>
-                
-                <div class="form-row">
+                <?php else: ?>
+                    <!-- HR Manager: Full edit form -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_first_name">First Name</label>
+                            <input type="text" class="form-control" id="edit_first_name" name="first_name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_last_name">Last Name</label>
+                            <input type="text" class="form-control" id="edit_last_name" name="last_name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_email">Email</label>
+                            <input type="email" class="form-control" id="edit_email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_password">New Password</label>
+                            <input type="password" class="form-control" id="edit_password" name="password" placeholder="Leave blank to keep current password">
+                            <small class="form-text text-muted">Leave blank to keep current password</small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_role">Role</label>
+                            <select class="form-control" id="edit_role" name="role" required>
+                                <option value="">Select Role</option>
+                                <option value="super_admin">Super Admin</option>
+                                <option value="hr_manager">HR Manager</option>
+                                <option value="dept_head">Department Head</option>
+                                <option value="section_head">Section Head</option>
+                                <option value="manager">Manager</option>
+                                <option value="employee">Employee</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_phone">Phone</label>
+                            <input type="text" class="form-control" id="edit_phone" name="phone">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_employee_id">Employee ID</label>
+                            <input type="text" class="form-control" id="edit_employee_id" name="employee_id" readonly>
+                        </div>
+                    </div>
+                    
                     <div class="form-group">
-                        <label for="edit_role">Role</label>
-                        <select class="form-control" id="edit_role" name="role" required>
-                            <option value="">Select Role</option>
-                            <option value="super_admin">Super Admin</option>
-                            <option value="hr_manager">HR Manager</option>
-                            <option value="dept_head">Department Head</option>
-                            <option value="section_head">Section Head</option>
-                            <option value="manager">Manager</option>
-                            <option value="employee">Employee</option>
-                        </select>
+                        <label for="edit_address">Address</label>
+                        <textarea class="form-control" id="edit_address" name="address" rows="3"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label for="edit_phone">Phone</label>
-                        <input type="text" class="form-control" id="edit_phone" name="phone">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit_employee_id">Employee ID</label>
-                        <input type="text" class="form-control" id="edit_employee_id" name="employee_id" readonly>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="edit_address">Address</label>
-                    <textarea class="form-control" id="edit_address" name="address" rows="3"></textarea>
-                </div>
+                <?php endif; ?>
                 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Update User</button>
@@ -1024,25 +999,19 @@ function getRoleBadge($role) {
     </div>
 
     <script>
-        // User modal functions
-        function showAddUserModal() {
-            document.getElementById('addUserModal').style.display = 'block';
-        }
-        
-        function hideAddUserModal() {
-            document.getElementById('addUserModal').style.display = 'none';
-        }
-        
         function showEditUserModal(user) {
             document.getElementById('edit_user_id').value = user.id;
-            document.getElementById('edit_first_name').value = user.first_name;
-            document.getElementById('edit_last_name').value = user.last_name;
-            document.getElementById('edit_email').value = user.email;
-            document.getElementById('edit_role').value = user.role;
-            document.getElementById('edit_phone').value = user.phone || '';
-            document.getElementById('edit_address').value = user.address || '';
-            document.getElementById('edit_password').value = '';
-            document.getElementById('edit_employee_id').value = user.employee_id || '';
+            <?php if ($user['role'] !== 'super_admin'): ?>
+                // Populate fields for non-super_admin users
+                document.getElementById('edit_first_name').value = user.first_name;
+                document.getElementById('edit_last_name').value = user.last_name;
+                document.getElementById('edit_email').value = user.email;
+                document.getElementById('edit_role').value = user.role;
+                document.getElementById('edit_phone').value = user.phone || '';
+                document.getElementById('edit_address').value = user.address || '';
+                document.getElementById('edit_employee_id').value = user.employee_id || '';
+            <?php endif; ?>
+            document.getElementById('edit_password').value = ''; // Always clear password field
             document.getElementById('editUserModal').style.display = 'block';
         }
         
@@ -1062,13 +1031,10 @@ function getRoleBadge($role) {
         
         // Close modals when clicking outside
         window.onclick = function(event) {
-            const modals = ['addUserModal', 'editUserModal'];
-            modals.forEach(modalId => {
-                const modal = document.getElementById(modalId);
-                if (event.target == modal) {
-                    modal.style.display = 'none';
-                }
-            });
+            const modal = document.getElementById('editUserModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
         }
     </script>
 </body>

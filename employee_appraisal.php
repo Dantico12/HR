@@ -77,22 +77,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'add_comment') {
         $appraisal_id = $_POST['appraisal_id'];
         $employee_comment = trim($_POST['employee_comment']);
+        $employee_satisfied = isset($_POST['employee_satisfied']) ? (int)$_POST['employee_satisfied'] : null;
         
-        if (!empty($employee_comment)) {
-            // Update appraisal with employee comment
-            $updateStmt = $conn->prepare("
-                UPDATE employee_appraisals 
-                SET employee_comment = ?, status= 'awaiting_submission',employee_comment_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ? AND employee_id = ?
-            ");
-            $updateStmt->bind_param("sii", $employee_comment, $appraisal_id, $currentEmployee['id']);
-            $updateStmt->execute();
-            
+        // Validate that comment is provided
+        if (empty($employee_comment)) {
+            $_SESSION['flash_message'] = 'Please enter a comment.';
+            $_SESSION['flash_type'] = 'warning';
+            header("Location: employee_appraisal.php");
+            exit();
+        }
+        
+        // Validate that satisfaction option is selected
+        if (is_null($employee_satisfied)) {
+            $_SESSION['flash_message'] = 'Please indicate whether you are satisfied with this appraisal.';
+            $_SESSION['flash_type'] = 'warning';
+            header("Location: employee_appraisal.php");
+            exit();
+        }
+        
+        // Update appraisal with employee comment and satisfaction
+        $updateStmt = $conn->prepare("
+            UPDATE employee_appraisals 
+            SET employee_comment = ?, employee_satisfied = ?, 
+                status = 'awaiting_submission', employee_comment_date = CURRENT_TIMESTAMP, 
+                updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ? AND employee_id = ?
+        ");
+        $updateStmt->bind_param("siii", $employee_comment, $employee_satisfied, $appraisal_id, $currentEmployee['id']);
+        
+        if ($updateStmt->execute()) {
             $_SESSION['flash_message'] = 'Your comment has been added successfully.';
             $_SESSION['flash_type'] = 'success';
         } else {
-            $_SESSION['flash_message'] = 'Please enter a comment.';
-            $_SESSION['flash_type'] = 'warning';
+            $_SESSION['flash_message'] = 'Error saving your comment. Please try again.';
+            $_SESSION['flash_type'] = 'danger';
         }
         
         header("Location: employee_appraisal.php");
@@ -341,6 +359,65 @@ $conn->close();
             opacity: 0.6;
             background-color: rgba(108, 117, 125, 0.1);
         }
+        
+        .satisfaction-status {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .satisfaction-options {
+            margin: 15px 0;
+        }
+        
+        .satisfaction-options label {
+            display: block;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 8px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .radio-option input[type="radio"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary-color);
+        }
+        
+        .satisfaction-options .text-muted {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            display: block;
+        }
+        
+        .satisfied-text {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        .not-satisfied-text {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
+        .form-actions {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -384,7 +461,7 @@ $conn->close();
                     </a></li>
                     <?php endif; ?>
                     <li><a href="employee_appraisal.php">
-                        <i class="fas fa-star"></i> Performance Appraisal
+                        <i class="fas fa-star"></i> Performance Management
                     </a></li>
                     <li><a href="payroll_management.php">
                         <i class="fas fa-money-check"></i> Payroll
@@ -405,6 +482,9 @@ $conn->close();
                 <?php endif; ?>
 
                  <div class="leave-tabs">
+                      <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing_director'])): ?>
+                        <a href="Strategic_plan.php" class="leave-tab">Strategic plan</a>
+                    <?php endif; ?>
                     <a href="employee_appraisal.php" class="leave-tab active">Employee Appraisal</a>
                     <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing_director', 'section_head', 'dept_head'])): ?>
                         <a href="performance_appraisal.php" class="leave-tab ">Performance Appraisal</a>
@@ -427,16 +507,14 @@ $conn->close();
                         foreach ($indicators as $indicator) {
                             if (isset($employee_scores[$indicator['id']])) {
                                 $score = $employee_scores[$indicator['id']]['score'];
-                           
                                 $total_score += ($score);
-                             
                             }
                         }
+                        
                         // Format status for display
                         $status_display = ucwords(str_replace('_', ' ', $appraisal['status']));
                         $status_class = 'status-' . $appraisal['status'];
                     ?>
-                   
                         <div class="appraisal-card">
                             <div class="appraisal-header">
                                 <div class="cycle-info">
@@ -460,7 +538,7 @@ $conn->close();
                                 <!-- Total Score Display -->
                                 <div class="total-score">
                                     <h5>Overall Score</h5>
-                                    <div class="score"><?php echo number_format($weighted_average, 1); ?>%</div>
+                                    <div class="score"><?php echo number_format($total_score, 1); ?></div>
                                 </div>
 
                                 <!-- Performance Indicators Table -->
@@ -515,21 +593,52 @@ $conn->close();
 
                             <!-- Employee Comment Section -->
                             <div class="comment-section">
-                                <h5>Your Comment</h5>
+                                <h5>Your Feedback</h5>
                                 <?php if ($appraisal['employee_comment']): ?>
-                                    <div class="readonly-comment">
-                                        <?php echo nl2br(htmlspecialchars($appraisal['employee_comment'])); ?>
+                                    <!-- Satisfaction Status Display -->
+                                    <?php if (!is_null($appraisal['employee_satisfied'])): ?>
+                                        <div class="satisfaction-status">
+                                            <strong>Satisfaction Status:</strong> 
+                                            <?php echo $appraisal['employee_satisfied'] ? 
+                                                '<span class="satisfied-text">Satisfied</span>' : 
+                                                '<span class="not-satisfied-text">Not Satisfied</span>'; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <div style="margin-top: 15px;">
+                                        <label>Your Comment:</label>
+                                        <div class="readonly-comment">
+                                            <?php echo nl2br(htmlspecialchars($appraisal['employee_comment'])); ?>
+                                        </div>
+                                        <small class="text-muted">
+                                            Added on <?php echo date('M d, Y H:i', strtotime($appraisal['employee_comment_date'])); ?>
+                                        </small>
                                     </div>
-                                    <small class="text-muted">
-                                        Added on <?php echo date('M d, Y H:i', strtotime($appraisal['employee_comment_date'])); ?>
-                                    </small>
+                                    
                                 <?php elseif ($appraisal['status'] === 'awaiting_employee' && $has_scores): ?>
                                     <form method="POST" action="">
                                         <input type="hidden" name="action" value="add_comment">
                                         <input type="hidden" name="appraisal_id" value="<?php echo $appraisal['id']; ?>">
                                         
-                                        <div class="form-group">
-                                            <label for="employee_comment">Please provide your feedback on this appraisal:</label>
+                                        <!-- Satisfaction Options -->
+                                        <div class="satisfaction-options">
+                                            <label>Are you satisfied with this appraisal? <span style="color: #dc3545;">*</span></label>
+                                            <div class="radio-group">
+                                                <div class="radio-option">
+                                                    <input type="radio" id="satisfied_yes" name="employee_satisfied" value="1" required>
+                                                    <label for="satisfied_yes">Satisfied</label>
+                                                </div>
+                                                <div class="radio-option">
+                                                    <input type="radio" id="satisfied_no" name="employee_satisfied" value="0" required>
+                                                    <label for="satisfied_no">Not Satisfied</label>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">Please select one option</small>
+                                        </div>
+                                        
+                                        <!-- Employee Comment -->
+                                        <div class="form-group" style="margin-top: 20px;">
+                                            <label for="employee_comment">Your Comment: <span style="color: #dc3545;">*</span></label>
                                             <textarea name="employee_comment" 
                                                       id="employee_comment" 
                                                       class="comment-textarea" 
@@ -538,12 +647,12 @@ $conn->close();
                                         </div>
                                         
                                         <div class="form-actions">
-                                            <button type="submit" class="btn btn-primary">Submit Comment</button>
+                                            <button type="submit" class="btn btn-primary">Submit Feedback</button>
                                         </div>
                                     </form>
                                 <?php else: ?>
                                     <div class="alert alert-info">
-                                        You will be able to add your comment once your appraiser completes the scoring.
+                                        You will be able to add your feedback once your appraiser completes the scoring.
                                     </div>
                                 <?php endif; ?>
                             </div>

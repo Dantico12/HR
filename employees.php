@@ -8,9 +8,30 @@ if (session_status() == PHP_SESSION_NONE) {
 }
 require_once 'config.php';
 
-
 // Get database connection
 $conn = getConnection();
+
+// Create uploads directories if they don't exist
+$uploadDir = 'uploads/documents/';
+if (!file_exists($uploadDir)) {
+    mkdir($uploadDir, 0777, true);
+}
+
+$profileUploadDir = 'uploads/profile_images/';
+if (!file_exists($profileUploadDir)) {
+    mkdir($profileUploadDir, 0777, true);
+}
+
+// Create employee_documents table if it doesn't exist
+$createTableSQL = "CREATE TABLE IF NOT EXISTS employee_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT NOT NULL,
+    document_name VARCHAR(255) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+)";
+$conn->query($createTableSQL);
 
 // Get current user from session
 $user = [
@@ -19,6 +40,28 @@ $user = [
     'role' => $_SESSION['user_role'] ?? 'guest',
     'id' => $_SESSION['user_id']
 ];
+
+// Check if we're viewing a specific employee's profile (for HR managers)
+$viewing_employee_id = null;
+$viewing_employee = null;
+if (hasPermission('hr_manager') && isset($_GET['view_employee'])) {
+    $viewing_employee_id = $_GET['view_employee'];
+    
+    // Fetch the employee details
+    $emp_query = "
+        SELECT e.*, 
+               d.name as department_name, 
+               s.name as section_name 
+        FROM employees e 
+        LEFT JOIN departments d ON e.department_id = d.id 
+        LEFT JOIN sections s ON e.section_id = s.id 
+        WHERE e.id = ?
+    ";
+    $emp_stmt = $conn->prepare($emp_query);
+    $emp_stmt->bind_param("i", $viewing_employee_id);
+    $emp_stmt->execute();
+    $viewing_employee = $emp_stmt->get_result()->fetch_assoc();
+}
 
 // Permission check function
 function hasPermission($requiredRole) {
@@ -107,19 +150,25 @@ $user_stmt->execute();
 $current_user = $user_stmt->get_result()->fetch_assoc();
 $employee_id_str = $current_user['employee_id'];
 
-$emp_query = "
-    SELECT e.*, 
-           d.name as department_name, 
-           s.name as section_name 
-    FROM employees e 
-    LEFT JOIN departments d ON e.department_id = d.id 
-    LEFT JOIN sections s ON e.section_id = s.id 
-    WHERE e.employee_id = ?
-";
-$emp_stmt = $conn->prepare($emp_query);
-$emp_stmt->bind_param("s", $employee_id_str);
-$emp_stmt->execute();
-$employee = $emp_stmt->get_result()->fetch_assoc();
+// Determine which employee to display
+$display_employee = $viewing_employee ?? null;
+$display_employee_id = $viewing_employee_id ?? $user['id'];
+
+if (!$display_employee) {
+    $emp_query = "
+        SELECT e.*, 
+               d.name as department_name, 
+               s.name as section_name 
+        FROM employees e 
+        LEFT JOIN departments d ON e.department_id = d.id 
+        LEFT JOIN sections s ON e.section_id = s.id 
+        WHERE e.employee_id = ?
+    ";
+    $emp_stmt = $conn->prepare($emp_query);
+    $emp_stmt->bind_param("s", $employee_id_str);
+    $emp_stmt->execute();
+    $display_employee = $emp_stmt->get_result()->fetch_assoc();
+}
 
 // Get departments and sections for forms
 $departments = $conn->query("SELECT * FROM departments ORDER BY name")->fetch_all(MYSQLI_ASSOC);
@@ -198,6 +247,9 @@ if (hasPermission('hr_manager')) {
     $employees = $result->fetch_all(MYSQLI_ASSOC);
 }
 
+// Define job groups
+$job_groups = ['1', '2', '3', '3A', '3B', '3C', '4', '5', '6', '7', '8', '9', '10'];
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
@@ -219,12 +271,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $section_id = !empty($_POST['section_id']) ? $_POST['section_id'] : null;
             $employee_type = $_POST['employee_type'];
             $employment_type = $_POST['employment_type'] ?: 'permanent';
+            $job_group = in_array($_POST['job_group'], $job_groups) ? $_POST['job_group'] : null;
 
             try {
                 $conn->begin_transaction();
                 
-                $stmt = $conn->prepare("INSERT INTO employees (employee_id, first_name, last_name, gender, national_id, phone, email, date_of_birth, designation, department_id, section_id, employee_type, employment_type, address, hire_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssssssssiissss", 
+                $stmt = $conn->prepare("INSERT INTO employees (employee_id, first_name, last_name, gender, national_id, phone, email, date_of_birth, designation, department_id, section_id, employee_type, employment_type, address, hire_date, job_group) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssssssssiisssss", 
                     $employee_id, 
                     $first_name, 
                     $last_name, 
@@ -239,7 +292,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $employee_type, 
                     $employment_type,
                     $address, 
-                    $hire_date
+                    $hire_date,
+                    $job_group
                 );
                 
                 $stmt->execute();
@@ -247,11 +301,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Insert into payroll table using the auto-incremented id from employees table
                 $payroll_status = 'active';
-                $payroll_stmt = $conn->prepare("INSERT INTO payroll (emp_id, employment_type, status) VALUES (?, ?, ?)");
-                $payroll_stmt->bind_param("iss", 
+                $payroll_stmt = $conn->prepare("INSERT INTO payroll (emp_id, employment_type, status, job_group) VALUES (?, ?, ?, ?)");
+                $payroll_stmt->bind_param("isss", 
                     $new_employee_id, 
                     $employment_type, 
-                    $payroll_status
+                    $payroll_status,
+                    $job_group
                 );
                 $payroll_stmt->execute();
                 
@@ -320,6 +375,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $employee_type = $_POST['employee_type'];
             $employment_type = $_POST['employment_type'];
             $employee_status = $_POST['employee_status'];
+            $job_group = in_array($_POST['job_group'], $job_groups) ? $_POST['job_group'] : null;
             
             try {
                 $conn->begin_transaction();
@@ -348,10 +404,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     employee_type=?, 
                     employment_type=?, 
                     employee_status=?, 
+                    job_group=?,
                     updated_at=NOW() 
                     WHERE id=?");
                 
-                $stmt->bind_param("ssssssssssiissssi", 
+                $stmt->bind_param("sssssssssiisssssi", 
                     $employee_id, 
                     $first_name, 
                     $last_name, 
@@ -368,12 +425,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $employee_type, 
                     $employment_type, 
                     $employee_status, 
+                    $job_group,
                     $id
                 );
                 
                 if (!$stmt->execute()) {
                     throw new Exception("Execute failed: (" . $stmt->errno . ") " . $stmt->error);
                 }
+                
+                // Update payroll table with job_group, employment_type, and status
+                $payroll_status = ($employee_status === 'active') ? 'active' : 'inactive';
+                $payroll_stmt = $conn->prepare("UPDATE payroll SET job_group = ?, employment_type = ?, status = ? WHERE emp_id = ?");
+                $payroll_stmt->bind_param("sssi", $job_group, $employment_type, $payroll_status, $id);
+                $payroll_stmt->execute();
                 
                 $user_role = 'employee';
                 switch($employee_type) {
@@ -445,12 +509,132 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             }
+        } elseif ($action === 'upload_document' && hasPermission('hr_manager')) {
+            $employee_id = $_POST['employee_id'];
+            $document_name = sanitizeInput($_POST['document_name']);
+            
+            if (isset($_FILES['document_file']) && $_FILES['document_file']['error'] === UPLOAD_ERR_OK) {
+                $file = $_FILES['document_file'];
+                
+                // Check if file is PDF
+                $fileType = mime_content_type($file['tmp_name']);
+                if ($fileType !== 'application/pdf') {
+                    $error = 'Only PDF files are allowed.';
+                } else {
+                    // Generate unique filename
+                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                    $fileName = uniqid() . '.' . $extension;
+                    $filePath = $uploadDir . $fileName;
+                    
+                    if (move_uploaded_file($file['tmp_name'], $filePath)) {
+                        // Save to database
+                        $stmt = $conn->prepare("INSERT INTO employee_documents (employee_id, document_name, file_name) VALUES (?, ?, ?)");
+                        $stmt->bind_param("iss", $employee_id, $document_name, $fileName);
+                        
+                        if ($stmt->execute()) {
+                            redirectWithMessage('employees.php', 'Document uploaded successfully!', 'success');
+                        } else {
+                            $error = 'Error saving document information.';
+                        }
+                    } else {
+                        $error = 'Error uploading file.';
+                    }
+                }
+            } else {
+                $error = 'Please select a valid PDF file.';
+            }
+        } elseif ($action === 'delete_document' && hasPermission('hr_manager')) {
+            $document_id = $_POST['document_id'];
+            
+            // Get file info before deleting
+            $stmt = $conn->prepare("SELECT file_name FROM employee_documents WHERE id = ?");
+            $stmt->bind_param("i", $document_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $document = $result->fetch_assoc();
+            
+            if ($document) {
+                // Delete file from server
+                $filePath = $uploadDir . $document['file_name'];
+                if (file_exists($filePath)) {
+                    unlink($filePath);
+                }
+                
+                // Delete from database
+                $delete_stmt = $conn->prepare("DELETE FROM employee_documents WHERE id = ?");
+                $delete_stmt->bind_param("i", $document_id);
+                
+                if ($delete_stmt->execute()) {
+                    redirectWithMessage('employees.php', 'Document deleted successfully!', 'success');
+                } else {
+                    $error = 'Error deleting document.';
+                }
+            }
+        } elseif ($action === 'upload_profile_image') {
+            $employee_auto_id = $_POST['employee_id'];
+
+            // Fetch employee to check authorization
+            $emp_stmt = $conn->prepare("SELECT employee_id, profile_image_url FROM employees WHERE id = ?");
+            $emp_stmt->bind_param("i", $employee_auto_id);
+            $emp_stmt->execute();
+            $emp_result = $emp_stmt->get_result();
+            $emp = $emp_result->fetch_assoc();
+            $emp_string_id = $emp['employee_id'];
+            $old_image_url = $emp['profile_image_url'];
+
+            if (!hasPermission('hr_manager') && $emp_string_id != $current_user['employee_id']) {
+                $error = 'Unauthorized to upload profile image.';
+            } elseif (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+                $file = $_FILES['profile_image'];
+                $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+                $fileType = mime_content_type($file['tmp_name']);
+
+                if (in_array($fileType, $allowed_types)) {
+                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                    $fileName = uniqid() . '.' . $extension;
+                    $filePath = $profileUploadDir . $fileName;
+                    $relativePath = 'uploads/profile_images/' . $fileName;
+
+                    if (move_uploaded_file($file['tmp_name'], $filePath)) {
+                        // Delete old image if exists
+                        if ($old_image_url && file_exists($old_image_url)) {
+                            unlink($old_image_url);
+                        }
+
+                        // Update database
+                        $update_stmt = $conn->prepare("UPDATE employees SET profile_image_url = ? WHERE id = ?");
+                        $update_stmt->bind_param("si", $relativePath, $employee_auto_id);
+                        
+                        if ($update_stmt->execute()) {
+                            redirectWithMessage('employees.php', 'Profile image uploaded successfully!', 'success');
+                        } else {
+                            $error = 'Error updating profile image.';
+                        }
+                    } else {
+                        $error = 'Error uploading file.';
+                    }
+                } else {
+                    $error = 'Only JPEG, PNG, or GIF files are allowed.';
+                }
+            } else {
+                $error = 'Please select a valid image file.';
+            }
         }
     }
 }
+
+// Fetch employee documents
+$documents = [];
+if (isset($display_employee['id'])) {
+    $doc_stmt = $conn->prepare("SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY uploaded_at DESC");
+    $doc_stmt->bind_param("i", $display_employee['id']);
+    $doc_stmt->execute();
+    $doc_result = $doc_stmt->get_result();
+    $documents = $doc_result->fetch_all(MYSQLI_ASSOC);
+}
+
 include 'header.php';
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -460,9 +644,7 @@ include 'header.php';
     <title>Profile - HR Management System</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Replace the entire <style> section in employees.php with this */
-<style>
-/* Global container styling - uses theme variables */
+        /* Global container styling - uses theme variables */
 .container {
     display: flex;
     min-height: 100vh;
@@ -627,6 +809,9 @@ include 'header.php';
     margin-bottom: 40px;
     padding-bottom: 15px;
     border-bottom: 2px solid var(--primary-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .document-header h2 {
@@ -634,6 +819,71 @@ include 'header.php';
     font-size: 1.8rem;
     font-weight: 700;
     margin: 0;
+}
+
+/* Avatar styling */
+.avatar-container {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.profile-img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--primary-color);
+}
+
+.avatar-initials {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    font-weight: bold;
+    margin: 0 auto;
+}
+
+/* Documents section styling */
+.documents-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.documents-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.document-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.document-item:last-child {
+    border-bottom: none;
+}
+
+.document-name {
+    font-weight: 500;
+}
+
+.document-actions {
+    display: flex;
+    gap: 10px;
 }
 
 .document-content {
@@ -733,6 +983,38 @@ include 'header.php';
 .btn-secondary:hover {
     background: #5a6268;
     box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-info {
+    background: #17a2b8;
+    border: none;
+    padding: 10px 20px;
+    color: #ffffff;
+    border-radius: 6px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-info:hover {
+    background: #138496;
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+}
+
+.btn-danger {
+    background: var(--error-color);
+    border: none;
+    padding: 10px 20px;
+    color: #ffffff;
+    border-radius: 6px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
 }
 
 .btn-sm {
@@ -941,13 +1223,17 @@ include 'header.php';
         grid-template-columns: 1fr;
     }
 
+    .document-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+
     .form-row {
         flex-direction: column;
         gap: 15px;
     }
 }
-</style>
-</style>
+    </style>
 </head>
 <body>
     <div class="container">
@@ -992,7 +1278,7 @@ include 'header.php';
                     <li><a href="employee_appraisal.php">
                         <i class="fas fa-star"></i> Performance Appraisal
                     </a></li>
-                    <li><a href="payroll_mnagements.php">
+                    <li><a href="payroll_management.php">
                         <i class="fas fa-money-check"></i> Payroll
                     </a></li>
                 </ul>
@@ -1026,23 +1312,64 @@ include 'header.php';
                         <div class="document-container">
                             <div class="document-header">
                                 <h2>Employee Profile</h2>
+                                <?php if (hasPermission('hr_manager')): ?>
+                                    <button onclick="showUploadModal()" class="btn btn-primary">Upload Document</button>
+                                <?php endif; ?>
                             </div>
-                            <div class="document-content">
+                            <div class="avatar-container">
+                                <?php if (!empty($display_employee['profile_image_url'])): ?>
+                                    <img src="<?php echo htmlspecialchars($display_employee['profile_image_url']); ?>" alt="Profile Image" class="profile-img">
+                                <?php else: ?>
+                                    <div class="avatar-initials">
+                                        <?php echo strtoupper(substr($display_employee['first_name'] ?? '', 0, 1) . substr($display_employee['last_name'] ?? '', 0, 1)); ?>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!$viewing_employee || hasPermission('hr_manager')): ?>
+                                    <button onclick="showProfileUploadModal()" class="btn btn-primary btn-sm" style="margin-top: 10px;">Upload Profile Image</button>
+                                <?php endif; ?>
+                            </div>
+                                <div class="document-content">
                                 <div class="label">Employee ID:</div>
-                                <div class="value"><?php echo htmlspecialchars($employee['employee_id']); ?></div>
+                                <div class="value"><?php echo htmlspecialchars($display_employee['employee_id']); ?></div>
                                 <div class="label">Name:</div>
-                                <div class="value"><?php echo htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name']); ?></div>
+                                <div class="value"><?php echo htmlspecialchars($display_employee['first_name'] . ' ' . $display_employee['last_name']); ?></div>
                                 <div class="label">Email:</div>
-                                <div class="value"><?php echo htmlspecialchars($employee['email'] ?? 'N/A'); ?></div>
+                                <div class="value"><?php echo htmlspecialchars($display_employee['email'] ?? 'N/A'); ?></div>
                                 <div class="label">Department:</div>
-                                <div class="value"><?php echo htmlspecialchars($employee['department_name'] ?? 'N/A'); ?></div>
+                                <div class="value"><?php echo htmlspecialchars($display_employee['department_name'] ?? 'N/A'); ?></div>
                                 <div class="label">Section:</div>
-                                <div class="value"><?php echo htmlspecialchars($employee['section_name'] ?? 'N/A'); ?></div>
+                                <div class="value"><?php echo htmlspecialchars($display_employee['section_name'] ?? 'N/A'); ?></div>
                                 <div class="label">Type:</div>
-                                <div class="value"><?php echo ucwords(str_replace('_', ' ', $employee['employee_type'] ?? 'N/A')); ?></div>
+                                <div class="value"><?php echo ucwords(str_replace('_', ' ', $display_employee['employee_type'] ?? 'N/A')); ?></div>
                                 <div class="label">Status:</div>
-                                <div class="value"><?php echo ucwords($employee['employee_status'] ?? 'N/A'); ?></div>
+                                <div class="value"><?php echo ucwords($display_employee['employee_status'] ?? 'N/A'); ?></div>
+                                <div class="label">Job Group:</div>
+                                <div class="value"><?php echo htmlspecialchars($display_employee['job_group'] ?? 'N/A'); ?></div>
+                            </div><br><br><br>
+                                <!-- Documents Section -->
+                            <div class="documents-section">
+                                <h3>Employee Documents</h3>
+                                <?php if (empty($documents)): ?>
+                                    <p>No documents uploaded yet.</p>
+                                <?php else: ?>
+                                    <div class="documents-list">
+                                        <?php foreach ($documents as $doc): ?>
+                                            <div class="document-item">
+                                                <div class="document-name"><?php echo htmlspecialchars($doc['document_name']); ?></div>
+                                                <div class="document-actions">
+                                                    <a href="uploads/documents/<?php echo htmlspecialchars($doc['file_name']); ?>" 
+                                                       target="_blank" class="btn btn-sm btn-primary">View</a>
+                                                    <?php if (hasPermission('hr_manager')): ?>
+                                                        <button onclick="deleteDocument(<?php echo $doc['id']; ?>)" 
+                                                                class="btn btn-sm btn-danger">Delete</button>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
+                            <?php if (!$viewing_employee): // Only show password form for own profile ?>
                             <div class="password-form">
                                 <h3>Change Password</h3>
                                 <form method="POST" action="">
@@ -1062,6 +1389,7 @@ include 'header.php';
                                     <button type="submit" class="btn btn-primary">Change Password</button>
                                 </form>
                             </div>
+                            <?php endif; ?>                         
                         </div>
                     </div>
                     <?php if (hasPermission('hr_manager')): ?>
@@ -1137,13 +1465,14 @@ include 'header.php';
                                         <th>Section</th>
                                         <th>Type</th>
                                         <th>Status</th>
+                                        <th>Job Group</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($employees)): ?>
                                         <tr>
-                                            <td colspan="8" class="text-center">No employees found</td>
+                                            <td colspan="9" class="text-center">No employees found</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($employees as $emp): ?>
@@ -1169,8 +1498,12 @@ include 'header.php';
                                                     ?>
                                                 </span>
                                             </td>
+                                            <td><?php echo htmlspecialchars($emp['job_group'] ?? 'N/A'); ?></td>
                                             <td>
-                                                <button onclick="showEditModal(<?php echo htmlspecialchars(json_encode($emp)); ?>)" class="btn btn-sm btn-primary">Edit</button>
+                                                <button onclick="showEditModal(<?php echo htmlspecialchars(json_encode($emp)); ?>)" 
+                                                        class="btn btn-sm btn-primary">Edit</button>
+                                                <a href="employees.php?view_employee=<?php echo $emp['id']; ?>" 
+                                                   class="btn btn-sm btn-info">Profile</a>
                                             </td>
                                         </tr>
                                         <?php endforeach; ?>
@@ -1276,7 +1609,7 @@ include 'header.php';
                         <select class="form-control" id="employee_type" name="employee_type" required onchange="handleEmployeeTypeChange()">
                             <option value="">Select Type</option>
                             <option value="officer">Officer</option>
-                            <option value="section_head">Section Head</option>
+                            <option value 'section_head'>Section Head</option>
                             <option value="manager">Manager</option>
                             <option value="hr_manager">Human Resource Manager</option>
                             <option value="dept_head">Department Head</option>
@@ -1299,6 +1632,16 @@ include 'header.php';
                     <label for="section_id">Section</label>
                     <select class="form-control" id="section_id" name="section_id">
                         <option value="">Select Section</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="job_group">Job Group</label>
+                    <select class="form-control" id="job_group" name="job_group" required>
+                        <option value="">Select Job Group</option>
+                        <?php foreach ($job_groups as $group): ?>
+                            <option value="<?php echo htmlspecialchars($group); ?>"><?php echo htmlspecialchars($group); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 
@@ -1340,7 +1683,7 @@ include 'header.php';
                         <input type="text" class="form-control" id="edit_last_name" name="last_name" required>
                     </div>
                     <div class="form-group">
-                        <label for="gender">Gender</label>
+                        <label for="edit_gender">Gender</label>
                         <select class="form-control" id="edit_gender" name="gender" required>
                             <option value="">Select Gender</option>
                             <option value="male">Male</option>
@@ -1442,6 +1785,16 @@ include 'header.php';
                     </div>
                 </div>
                 
+                <div class="form-group">
+                    <label for="edit_job_group">Job Group</label>
+                    <select class="form-control" id="edit_job_group" name="job_group" required>
+                        <option value="">Select Job Group</option>
+                        <?php foreach ($job_groups as $group): ?>
+                            <option value="<?php echo htmlspecialchars($group); ?>"><?php echo htmlspecialchars($group); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Update Employee</button>
                     <button type="button" class="btn btn-secondary" onclick="hideEditModal()">Cancel</button>
@@ -1450,6 +1803,59 @@ include 'header.php';
         </div>
     </div>
     <?php endif; ?>
+
+    <!-- Upload Document Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Upload Document</h3>
+                <span class="close" onclick="hideUploadModal()">&times;</span>
+            </div>
+            <form method="POST" action="" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="upload_document">
+                <input type="hidden" name="employee_id" value="<?php echo $display_employee['id'] ?? ''; ?>">
+                
+                <div class="form-group">
+                    <label for="document_name">Document Name</label>
+                    <input type="text" class="form-control" id="document_name" name="document_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="document_file">Select PDF File</label>
+                    <input type="file" class="form-control" id="document_file" name="document_file" accept=".pdf" required>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideUploadModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Upload Profile Image Modal -->
+    <div id="profileUploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Upload Profile Image</h3>
+                <span class="close" onclick="hideProfileUploadModal()">&times;</span>
+            </div>
+            <form method="POST" action="" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="upload_profile_image">
+                <input type="hidden" name="employee_id" value="<?php echo $display_employee['id'] ?? ''; ?>">
+                
+                <div class="form-group">
+                    <label for="profile_image">Select Image (JPEG, PNG, GIF)</label>
+                    <input type="file" class="form-control" id="profile_image" name="profile_image" accept="image/jpeg, image/png, image/gif" required>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideProfileUploadModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         // Tab switching
@@ -1489,6 +1895,7 @@ include 'header.php';
             document.getElementById('edit_department_id').value = employee.department_id;
             document.getElementById('edit_employee_status').value = employee.employee_status;
             document.getElementById('edit_gender').value = employee.gender;
+            document.getElementById('edit_job_group').value = employee.job_group || '';
             
             updateEditSections();
             setTimeout(() => {
@@ -1502,6 +1909,46 @@ include 'header.php';
         
         function hideEditModal() {
             document.getElementById('editModal').style.display = 'none';
+        }
+        
+        function showUploadModal() {
+            document.getElementById('uploadModal').style.display = 'block';
+        }
+        
+        function hideUploadModal() {
+            document.getElementById('uploadModal').style.display = 'none';
+        }
+
+        function showProfileUploadModal() {
+            document.getElementById('profileUploadModal').style.display = 'block';
+        }
+        
+        function hideProfileUploadModal() {
+            document.getElementById('profileUploadModal').style.display = 'none';
+        }
+        
+        function deleteDocument(docId) {
+            if (confirm('Are you sure you want to delete this document?')) {
+                // Submit a form to delete the document
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '';
+                
+                const actionInput = document.createElement('input');
+                actionInput.type = 'hidden';
+                actionInput.name = 'action';
+                actionInput.value = 'delete_document';
+                form.appendChild(actionInput);
+                
+                const idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'document_id';
+                idInput.value = docId;
+                form.appendChild(idInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
         }
         
         function handleEmployeeTypeChange() {
@@ -1585,10 +2032,17 @@ include 'header.php';
         window.onclick = function(event) {
             const addModal = document.getElementById('addModal');
             const editModal = document.getElementById('editModal');
+            const uploadModal = document.getElementById('uploadModal');
+            const profileUploadModal = document.getElementById('profileUploadModal');
+            
             if (event.target == addModal) {
                 hideAddModal();
             } else if (event.target == editModal) {
                 hideEditModal();
+            } else if (event.target == uploadModal) {
+                hideUploadModal();
+            } else if (event.target == profileUploadModal) {
+                hideProfileUploadModal();
             }
         }
     </script>

@@ -172,8 +172,8 @@ include 'header.php';
                         <i class="fas fa-calendar-alt"></i> Leave Management
                     </a></li>
                     <?php endif; ?>
-                    <li><a href="employee_appraisal.php">
-                        <i class="fas fa-star"></i> Performance Appraisal
+                    <li><a href="strategic_plan.php?tab=strategic_plan">
+                        <i class="fas fa-star"></i> Performance Management
                     </a></li>
                     <li><a href="payroll_management.php">
                         <i class="fas fa-money-check"></i> Payroll

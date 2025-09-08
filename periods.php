@@ -14,6 +14,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 require_once 'config.php';
+require_once 'header.php';
 
 // Get current user from session
 $user = [
@@ -479,26 +480,16 @@ $conn->close();
                     <li><a href="leave_management.php">Leave Management</a></li>
                     <?php endif; ?>
                     <li><a href="employee_appraisal.php">Performance Appraisal</a></li>
-                    <li><a href="payroll.php">Payroll</a></li>
-                    <li><a href="periods.php" class="active">Periods</a></li>
+                    <li><a href="payroll_management.php" class="active">Payroll</a></li>
                 </ul>
             </nav>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
-            <div class="header">
-                <h1>Payroll Periods Management</h1>
-                <div class="user-info">
-                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
-                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
-                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
-                </div>
-            </div>
-
             <div class="content">
                 <!-- Tabs Navigation -->
-                <div class="tabs">
+                <div class="leave-tabs">
                     <a href="payroll_management.php">Payroll Management</a>
                     <a href="deductions.php">Deductions</a>
                     <a href="add_bank.php">Add Banks</a>
@@ -634,7 +625,7 @@ $conn->close();
                         
                         <div class="form-group">
                             <label class="form-label" for="create_is_locked">Locked</label>
-                            <input type="checkbox" id="create_is_locked" name="is_locked">
+                            <input type="checkbox" id="create_is_locked" name="is_locked" value="1">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -700,7 +691,7 @@ $conn->close();
                         
                         <div class="form-group">
                             <label class="form-label" for="edit_is_locked">Locked</label>
-                            <input type="checkbox" id="edit_is_locked" name="is_locked">
+                            <input type="checkbox" id="edit_is_locked" name="is_locked" value="1">
                         </div>
                     </div>
                     <div class="modal-footer">
