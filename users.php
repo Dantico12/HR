@@ -182,13 +182,20 @@ $users = $result->fetch_all(MYSQLI_ASSOC);
                 <h1>HR System</h1>
                 <p>Management Portal</p>
             </div>
+<<<<<<< HEAD
              <nav class="nav">
                 <ul>
                     <li><a href="dashboard.php" class="active">Dashboard</a></li>
+=======
+            <nav class="nav">
+                <ul>
+                    <li><a href="dashboard.php">Dashboard</a></li>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     <li><a href="employees.php">Employees</a></li>
                     <?php if (hasPermission('hr_manager')): ?>
                     <li><a href="departments.php">Departments</a></li>
                     <?php endif; ?>
+<<<<<<< HEAD
                     <?php if (hasPermission('super_admin')): ?>
                    <li><a href="admin.php?tab=users">Admin</a></li>
                    <?php elseif (hasPermission('hr_manager')): ?>
@@ -202,6 +209,17 @@ $users = $result->fetch_all(MYSQLI_ASSOC);
                     <?php endif; ?>
                     <li><a href="employee_appraisal.php">Performance Appraisal</a></li>
                     <li><a href="payroll_mnagements.php" ><i class="fas fa-money-check"></i> Payroll</a></li>
+=======
+                    <?php if (hasPermission('super_admin')|| hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php" class="active">Admin</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')||hasPermission('dept_head')): ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php endif; ?>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 </ul>
             </nav>
         </div>

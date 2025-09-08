@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 <?php
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -13,7 +17,11 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
+<<<<<<< HEAD
 require_once 'header.php';
+=======
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 require_once 'config.php';
 $conn = getConnection();
 
@@ -72,7 +80,10 @@ function getStatusBadgeClass($status) {
         case 'pending': return 'badge-warning';
         case 'pending_section_head': return 'badge-info';
         case 'pending_dept_head': return 'badge-primary';
+<<<<<<< HEAD
         case 'pending_managing_director': return 'badge-secondary';
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         case 'pending_hr': return 'badge-warning';
         default: return 'badge-secondary';
     }
@@ -85,12 +96,16 @@ function getStatusDisplayName($status) {
         case 'pending': return 'Pending';
         case 'pending_section_head': return 'Pending Section Head Approval';
         case 'pending_dept_head': return 'Pending Department Head Approval';
+<<<<<<< HEAD
         case 'pending_managing_director': return 'Pending Managing Director Approval';
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         case 'pending_hr': return 'Pending HR Approval';
         default: return ucfirst($status);
     }
 }
 
+<<<<<<< HEAD
 // Function to update leave balance
 function updateLeaveBalance($conn, $employeeId, $leaveTypeId, $days, $is_add = false) {
     try {
@@ -202,6 +217,8 @@ function updateLeaveBalance($conn, $employeeId, $leaveTypeId, $days, $is_add = f
     }
 }
 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 // Get user's employee record
 $userEmployeeQuery = "SELECT e.* FROM employees e 
                       LEFT JOIN users u ON u.employee_id = e.employee_id 
@@ -220,6 +237,7 @@ $rejectedLeaves = [];
 
 // Handle form submissions and GET actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
+<<<<<<< HEAD
     // Handle approval/rejection actions
     if (isset($_GET['action'])) {
         $action = $_GET['action'];
@@ -231,10 +249,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                 $conn->begin_transaction();
 
                 // Get leave application
+=======
+    // Include all the action handling logic from the original file
+    // This would be the same logic from the original manage tab handling
+    
+    // Handle approval/rejection actions
+    if (isset($_GET['action'])) {
+        $action = $_GET['action'];
+        
+        if ($action === 'section_head_approve' && isset($_GET['id']) && hasPermission('section_head')) {
+            $leaveId = (int)$_GET['id'];
+            try {
+                $conn->begin_transaction();
+                
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 $stmt = $conn->prepare("SELECT * FROM leave_applications WHERE id = ?");
                 $stmt->bind_param("i", $leaveId);
                 $stmt->execute();
                 $application = $stmt->get_result()->fetch_assoc();
+<<<<<<< HEAD
 
                 if ($application['leave_type_id'] == 9) {
                     throw new Exception("Claim a day leaves can only be approved by the HR manager.");
@@ -242,10 +275,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
 
                 // Get approver employee record
                 $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ?)";
+=======
+                
+                $userEmpQuery = "SELECT id FROM employees WHERE employee_id = (SELECT employee_id FROM users WHERE id = ? )";
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 $stmt = $conn->prepare($userEmpQuery);
                 $stmt->bind_param("s", $user['id']);
                 $stmt->execute();
                 $userEmpRecord = $stmt->get_result()->fetch_assoc();
+<<<<<<< HEAD
 
                 // Check if application is in correct status and approver has authority
                 if ($userEmpRecord && $application && $application['status'] === 'pending_section_head') {
@@ -259,6 +297,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
                     $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
                     $stmt->execute();
 
+=======
+                
+                $empSectionQuery = "SELECT section_id FROM employees WHERE id = ?";
+                $stmt = $conn->prepare($empSectionQuery);
+                $stmt->bind_param("i", $application['employee_id']);
+                $stmt->execute();
+                $empSectionResult = $stmt->get_result();
+                $empSection = $empSectionResult->fetch_assoc();
+                
+                if ($userEmpRecord && $application && $application['status'] === 'pending_section_head' &&
+                    $empSection['section_id'] == $userEmployee['section_id']) {
+                    
+                    $stmt = $conn->prepare("UPDATE leave_applications SET status = 'pending_dept_head', section_head_approval = 'approved', section_head_approved_by = ?, section_head_approved_at = NOW() WHERE id = ?");
+                    $stmt->bind_param("ii", $userEmpRecord['id'], $leaveId);
+                    $stmt->execute();
+                    
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     $conn->commit();
                     $_SESSION['flash_message'] = "Leave application approved by section head. Sent to department head.";
                     $_SESSION['flash_type'] = "success";
@@ -275,6 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
             header("Location: manage.php");
             exit();
         }
+<<<<<<< HEAD
 
         // DEPARTMENT HEAD APPROVAL (final approval)
         elseif ($action === 'dept_head_approve' && hasPermission('dept_head')) {
@@ -611,6 +667,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
             header("Location: manage.php");
             exit();
         }
+=======
+        
+        // Add other action handlers here (reject, dept_head_approve, etc.)
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
     }
 }
 
@@ -618,11 +678,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['action'])) {
 try {
     // Role-specific filtering for pending leaves
     if ($user['role'] === 'section_head' && $userEmployee) {
+<<<<<<< HEAD
         // Section heads see applications from their section employees (status: pending_section_head)
         $sectionId = (int)$userEmployee['section_id'];
 
         $pendingQuery = "SELECT la.*, e.employee_id as emp_id, e.first_name, e.last_name,
                          lt.name as leave_type_name, d.name as department_name, s.name as section_name
+=======
+        $sectionId = (int)$userEmployee['section_id'];
+        
+        $pendingQuery = "SELECT la.*, e.employee_id as emp_id, e.first_name, e.last_name,
+                         lt.name as leave_type_name, d.name as department_name, s.name as section_name,
+                         la.primary_days, la.annual_days, la.unpaid_days
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                          FROM leave_applications la
                          JOIN employees e ON la.employee_id = e.id
                          JOIN leave_types lt ON la.leave_type_id = lt.id
@@ -638,6 +706,7 @@ try {
         $pendingLeaves = $pendingResult->fetch_all(MYSQLI_ASSOC);
     } 
     elseif ($user['role'] === 'dept_head' && $userEmployee) {
+<<<<<<< HEAD
         // Department heads see:
         // 1. Applications from their department employees that have been approved by section heads (status: pending_dept_head)
         // 2. Applications from section heads in their department (status: pending_dept_head)
@@ -645,6 +714,13 @@ try {
 
         $pendingQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
                         lt.name as leave_type_name, d.name as department_name, s.name as section_name
+=======
+        $deptId = (int)$userEmployee['department_id'];
+        
+        $pendingQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
+                        lt.name as leave_type_name, d.name as department_name, s.name as section_name,
+                        la.primary_days, la.annual_days, la.unpaid_days
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                         FROM leave_applications la
                         JOIN employees e ON la.employee_id = e.id
                         JOIN leave_types lt ON la.leave_type_id = lt.id
@@ -659,6 +735,7 @@ try {
         $pendingResult = $stmt->get_result();
         $pendingLeaves = $pendingResult->fetch_all(MYSQLI_ASSOC);
     }
+<<<<<<< HEAD
     elseif ($user['role'] === 'manager' && $userEmployee) {
         // Managers see their own applications pending approval (status: pending_managing_director)
         $pendingQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
@@ -755,6 +832,23 @@ try {
                      LIMIT 10";
     $rejectedResult = $conn->query($rejectedQuery);
     $rejectedLeaves = $rejectedResult->fetch_all(MYSQLI_ASSOC);
+=======
+    else {
+        // HR and other roles see all pending applications
+        $pendingQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name,
+                         lt.name as leave_type_name, d.name as department_name, s.name as section_name,
+                         la.primary_days, la.annual_days, la.unpaid_days
+                         FROM leave_applications la
+                         JOIN employees e ON la.employee_id = e.id
+                         JOIN leave_types lt ON la.leave_type_id = lt.id
+                         LEFT JOIN departments d ON e.department_id = d.id
+                         LEFT JOIN sections s ON e.section_id = s.id
+                         WHERE la.status IN ('pending', 'pending_section_head', 'pending_dept_head')
+                         ORDER BY la.applied_at DESC";
+        $pendingResult = $conn->query($pendingQuery);
+        $pendingLeaves = $pendingResult->fetch_all(MYSQLI_ASSOC);
+    }
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 } catch (Exception $e) {
     $error = "Error fetching data: " . $e->getMessage();
 }
@@ -769,13 +863,18 @@ try {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<<<<<<< HEAD
    <div class="container">
+=======
+    <div class="container">
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-brand">
                 <h1>HR System</h1>
                 <p>Management Portal</p>
             </div>
+<<<<<<< HEAD
             <nav class="nav">
                 <ul>
                     <li><a href="dashboard.php" class="active">
@@ -822,13 +921,48 @@ try {
         <div class="main-content">
             
             <!-- Content -->
+=======
+            <div class="nav">
+                <ul>
+                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li><a href="employees.php">Employees</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="departments.php">Departments</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('super_admin')|| hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php">Admin</a></li>
+                    <?php endif; ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>Manage Leave Applications</h1>
+                <div class="user-info">
+                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
+                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
+                </div>
+            </div>
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type']; ?>">
                         <?php echo htmlspecialchars($flash['message']); ?>
                     </div>
                 <?php endif; ?>
+<<<<<<< HEAD
                 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 
                 <?php if ($success): ?>
                     <div class="alert alert-success">
@@ -842,6 +976,7 @@ try {
                     </div>
                 <?php endif; ?>
 
+<<<<<<< HEAD
                  <div class="leave-tabs">
                       <a href="strategic_plan.php" class="leave-tab active">Strategic plan</a>
                     <a href="leave_management.php" class="leave-tab">Apply Leave</a>
@@ -850,6 +985,15 @@ try {
                     <?php endif; ?>
                     <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing director'])): ?>
                     <a href="history.php" class="leave-tab ">Leave History</a>
+=======
+                <div class="leave-tabs">
+                    <a href="leave_management.php" class="leave-tab">Apply Leave</a>
+                    <?php if (in_array($user['role'], ['hr_manager', 'dept_head', 'section_head', 'manager', 'managing_director','super_admin'])): ?>
+                    <a href="manage.php" class="leave-tab active">Manage Leave</a>
+                    <?php endif; ?>
+                    <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing director'])): ?>
+                    <a href="history.php" class="leave-tab">Leave History</a>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     <a href="holidays.php" class="leave-tab">Holidays</a>
                     <?php endif; ?>
                     <a href="profile.php" class="leave-tab">My Leave Profile</a>
@@ -901,23 +1045,36 @@ try {
                                                 <a href="manage.php?action=section_head_approve&id=<?php echo $leave['id']; ?>"
                                                    class="btn btn-success btn-sm"
                                                    onclick="return confirm('Approve this leave application as section head?')">Approve</a>
+<<<<<<< HEAD
                                                 <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
+=======
+                                                <a href="manage.php?action=section_head_reject&id=<?php echo $leave['id']; ?>"
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                                    class="btn btn-danger btn-sm"
                                                    onclick="return confirm('Reject this leave application?')">Reject</a>
                                             <?php elseif ($user['role'] === 'dept_head' && $leave['status'] === 'pending_dept_head'): ?>
                                                 <a href="manage.php?action=dept_head_approve&id=<?php echo $leave['id']; ?>"
                                                    class="btn btn-success btn-sm"
                                                    onclick="return confirm('Approve this leave application as department head?')">Approve</a>
+<<<<<<< HEAD
                                                 <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
                                                    class="btn btn-danger btn-sm"
                                                    onclick="return confirm('Reject this leave application?')">Reject</a>
                                             <?php elseif ($user['role'] === 'managing_director' && $leave['status'] === 'pending_managing_director'): ?>
                                                 <a href="manage.php?action=managing_director_approve&id=<?php echo $leave['id']; ?>"
+=======
+                                                <a href="manage.php?action=dept_head_reject&id=<?php echo $leave['id']; ?>"
+                                                   class="btn btn-danger btn-sm"
+                                                   onclick="return confirm('Reject this leave application?')">Reject</a>
+                                            <?php elseif ($user['role'] === 'managing_director' && $leave['status'] === 'pending_managing_director'): ?>
+                                                <a href="manage.php?action=approve_leave&id=<?php echo $leave['id']; ?>"
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                                    class="btn btn-success btn-sm"
                                                    onclick="return confirm('Approve this leave application as Managing Director?')">Approve</a>
                                                 <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
                                                    class="btn btn-danger btn-sm"
                                                    onclick="return confirm('Reject this leave application?')">Reject</a>
+<<<<<<< HEAD
                                             <?php elseif ($user['role'] === 'hr_manager'): 
                                                 // Check if this is the HR manager's own application
                                                 $isOwnApplication = false;
@@ -929,11 +1086,22 @@ try {
                                                     <a href="manage.php?action=hr_approve&id=<?php echo $leave['id']; ?>"
                                                        class="btn btn-success btn-sm"
                                                        onclick="return confirm('Approve this leave application as HR?')">HR Approve</a>
+=======
+                                            <?php elseif ($user['role'] === 'hr_manager'): ?>
+                                                <?php if ($leave['status'] === 'pending_hr_manager'): ?>
+                                                    <a href="manage.php?action=approve_leave&id=<?php echo $leave['id']; ?>"
+                                                       class="btn btn-success btn-sm"
+                                                       onclick="return confirm('Approve this leave application?')">HR Approve</a>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                                     <a href="manage.php?action=reject_leave&id=<?php echo $leave['id']; ?>"
                                                        class="btn btn-danger btn-sm"
                                                        onclick="return confirm('Reject this leave application?')">Reject</a>
                                                 <?php else: ?>
+<<<<<<< HEAD
                                                     <span class="text-muted">Pending MD Approval</span>
+=======
+                                                    <span class="text-muted">Awaiting other approvals</span>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                                 <?php endif; ?>
                                             <?php else: ?>
                                                 <span class="text-muted">No actions available</span>
@@ -958,14 +1126,21 @@ try {
                                     <th>End Date</th>
                                     <th>Days</th>
                                     <th>Approved By</th>
+<<<<<<< HEAD
                                     <th>Approval Date</th>
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                     <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($approvedLeaves)): ?>
                                     <tr>
+<<<<<<< HEAD
                                         <td colspan="8" class="text-center">No approved leaves found</td>
+=======
+                                        <td colspan="7" class="text-center">No approved leaves found</td>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($approvedLeaves as $leave): ?>
@@ -976,7 +1151,10 @@ try {
                                         <td><?php echo formatDate($leave['end_date']); ?></td>
                                         <td><?php echo $leave['days_requested']; ?></td>
                                         <td><?php echo htmlspecialchars($leave['approver_name'] ?? 'System'); ?></td>
+<<<<<<< HEAD
                                         <td><?php echo formatDate($leave['approval_date'] ?? 'N/A'); ?></td>
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                         <td><span class="badge badge-success">Approved</span></td>
                                     </tr>
                                     <?php endforeach; ?>
@@ -1026,4 +1204,8 @@ try {
         </div>
     </div>
 </body>
+<<<<<<< HEAD
 </html>
+=======
+</html>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3

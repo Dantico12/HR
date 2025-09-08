@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 <?php
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -13,7 +17,11 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
+<<<<<<< HEAD
 require_once 'header.php';
+=======
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 require_once 'config.php';
 $conn = getConnection();
 
@@ -92,7 +100,12 @@ if ($userEmployee) {
     $employee = $userEmployee;
 
     // Get leave balances for current user with leave type details - only latest financial year
+<<<<<<< HEAD
     $latestYearQuery = "SELECT MAX(year_name) as latest_year FROM  financial_years";
+=======
+    // First get the latest financial_year_id
+    $latestYearQuery = "SELECT MAX(financial_year_id) as latest_year FROM employee_leave_balances";
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
     $latestYearResult = $conn->query($latestYearQuery);
     $latestYear = $latestYearResult->fetch_assoc()['latest_year'];
 
@@ -124,12 +137,17 @@ if ($userEmployee) {
 ?>
 
 <!DOCTYPE html>
+<<<<<<< HEAD
 <html lang="en" data-theme="<?php echo $_SESSION['theme'] ?? 'light'; ?>">
+=======
+<html lang="en">
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Leave Profile - HR Management System</title>
     <link rel="stylesheet" href="style.css">
+<<<<<<< HEAD
     
     <style>
         /* Ensure body adapts to theme */
@@ -425,11 +443,18 @@ if ($userEmployee) {
 </head>
 <body>
     <div class="container">
+=======
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         <div class="sidebar">
             <div class="sidebar-brand">
                 <h1>HR System</h1>
                 <p>Management Portal</p>
             </div>
+<<<<<<< HEAD
             <nav class="nav">
                 <ul>
                     <li><a href="dashboard.php" class="active">
@@ -473,13 +498,49 @@ if ($userEmployee) {
         </div>
         
         <div class="main-content">
+=======
+            <div class="nav">
+                <ul>
+                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li><a href="employees.php">Employees</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="departments.php">Departments</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('super_admin')|| hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php">Admin</a></li>
+                    <?php endif; ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>My Leave Profile</h1>
+                <div class="user-info">
+                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
+                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
+                </div>
+            </div>
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             <div class="content">
                 <div class="leave-tabs">
                     <a href="leave_management.php" class="leave-tab">Apply Leave</a>
                     <?php if (in_array($user['role'], ['hr_manager', 'dept_head', 'section_head', 'manager', 'managing_director','super_admin'])): ?>
                     <a href="manage.php" class="leave-tab">Manage Leave</a>
                     <?php endif; ?>
+<<<<<<< HEAD
                     <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing_director'])): ?>
+=======
+                    <?php if(in_array($user['role'], ['hr_manager', 'super_admin', 'manager','managing director'])): ?>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     <a href="history.php" class="leave-tab">Leave History</a>
                     <a href="holidays.php" class="leave-tab">Holidays</a>
                     <?php endif; ?>
@@ -656,4 +717,8 @@ if ($userEmployee) {
         </div>
     </div>
 </body>
+<<<<<<< HEAD
 </html>
+=======
+</html>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3

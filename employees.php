@@ -11,6 +11,7 @@ require_once 'config.php';
 // Get database connection
 $conn = getConnection();
 
+<<<<<<< HEAD
 // Create uploads directories if they don't exist
 $uploadDir = 'uploads/documents/';
 if (!file_exists($uploadDir)) {
@@ -33,6 +34,8 @@ $createTableSQL = "CREATE TABLE IF NOT EXISTS employee_documents (
 )";
 $conn->query($createTableSQL);
 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 // Get current user from session
 $user = [
     'first_name' => isset($_SESSION['user_name']) ? explode(' ', $_SESSION['user_name'])[0] : 'User',
@@ -41,6 +44,7 @@ $user = [
     'id' => $_SESSION['user_id']
 ];
 
+<<<<<<< HEAD
 // Check if we're viewing a specific employee's profile (for HR managers)
 $viewing_employee_id = null;
 $viewing_employee = null;
@@ -63,11 +67,19 @@ if (hasPermission('hr_manager') && isset($_GET['view_employee'])) {
     $viewing_employee = $emp_stmt->get_result()->fetch_assoc();
 }
 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 // Permission check function
 function hasPermission($requiredRole) {
     $userRole = $_SESSION['user_role'] ?? 'guest';
     
+<<<<<<< HEAD
     $roles = [
+=======
+    // Permission hierarchy
+    $roles = [
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         'managing_director' => 6,
         'super_admin' => 5,
         'hr_manager' => 4,
@@ -92,11 +104,15 @@ function getEmployeeTypeBadge($type) {
         'temporary' => 'badge-secondary',
         'officer' => 'badge-primary',
         'section_head' => 'badge-info',
+<<<<<<< HEAD
         'manager' => 'badge-success',
         'hr_manager' => 'badge-success',
         'dept_head' => 'badge-info',
         'managing_director' => 'badge-primary',
         'bod_chairman' => 'badge-primary'
+=======
+        'manager' => 'badge-success'
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
     ];
     return $badges[$type] ?? 'badge-light';
 }
@@ -106,16 +122,24 @@ function getEmployeeStatusBadge($status) {
         'active' => 'badge-success',
         'on_leave' => 'badge-warning',
         'terminated' => 'badge-danger',
+<<<<<<< HEAD
         'resigned' => 'badge-secondary',
         'inactive' => 'badge-secondary',
         'fired' => 'badge-danger',
         'retired' => 'badge-secondary'
+=======
+        'resigned' => 'badge-secondary'
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
     ];
     return $badges[$status] ?? 'badge-light';
 }
 
 function formatDate($date) {
+<<<<<<< HEAD
     if (!$date || $date == '0000-00-00') return 'N/A';
+=======
+    if (!$date) return 'N/A';
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
     return date('M d, Y', strtotime($date));
 }
 
@@ -143,6 +167,7 @@ function sanitizeInput($data) {
     return htmlspecialchars(stripslashes(trim($data)));
 }
 
+<<<<<<< HEAD
 // Fetch current user and employee details
 $user_stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
 $user_stmt->bind_param("i", $user['id']);
@@ -251,6 +276,9 @@ if (hasPermission('hr_manager')) {
 $job_groups = ['1', '2', '3', '3A', '3B', '3C', '4', '5', '6', '7', '8', '9', '10'];
 
 // Handle form submissions
+=======
+// Handle form submission for adding/editing employees
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         $action = $_POST['action'];
@@ -267,6 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $date_of_birth = $_POST['date_of_birth'];
             $hire_date = $_POST['hire_date'];
             $designation = sanitizeInput($_POST['designation']) ?: 'Employee';
+<<<<<<< HEAD
             $department_id = !empty($_POST['department_id']) ? $_POST['department_id'] : null;
             $section_id = !empty($_POST['section_id']) ? $_POST['section_id'] : null;
             $employee_type = $_POST['employee_type'];
@@ -278,6 +307,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $stmt = $conn->prepare("INSERT INTO employees (employee_id, first_name, last_name, gender, national_id, phone, email, date_of_birth, designation, department_id, section_id, employee_type, employment_type, address, hire_date, job_group) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->bind_param("sssssssssiisssss", 
+=======
+            $department_id =! empty( $_POST['department_id']) ? $_POST['department_id'] : null;
+            $section_id = !empty($_POST['section_id']) ? $_POST['section_id'] : null;
+            $employee_type = $_POST['employee_type'] ;
+            $employment_type = $_POST['employment_type'] ?: 'permanent';
+
+            try {
+                // Start transaction
+                $conn->begin_transaction();
+                
+                // Insert employee record
+                $full_name = trim($first_name . ' ' . $last_name);
+                $stmt = $conn->prepare("INSERT INTO employees (employee_id, first_name, last_name,gender, national_id, phone, email, date_of_birth, designation, department_id, section_id, employee_type, employment_type, address, hire_date) VALUES (?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("sssssssssssssss", 
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     $employee_id, 
                     $first_name, 
                     $last_name, 
@@ -292,13 +336,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $employee_type, 
                     $employment_type,
                     $address, 
+<<<<<<< HEAD
                     $hire_date,
                     $job_group
+=======
+                    $hire_date
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 );
                 
                 $stmt->execute();
                 $new_employee_id = $conn->insert_id;
                 
+<<<<<<< HEAD
                 // Insert into payroll table using the auto-incremented id from employees table
                 $payroll_status = 'active';
                 $payroll_stmt = $conn->prepare("INSERT INTO payroll (emp_id, employment_type, status, job_group) VALUES (?, ?, ?, ?)");
@@ -311,6 +360,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $payroll_stmt->execute();
                 
                 $user_role = 'employee';
+=======
+                // Determine user role based on employee type
+                $user_role = 'employee'; // default role
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 switch($employee_type) {
                     case 'managing_director':
                     case 'bod_chairman':
@@ -323,7 +376,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $user_role = 'hr_manager';
                         break;
                     case 'manager':
+<<<<<<< HEAD
                         $user_role = 'manager';
+=======
+                        $user_role = 'hr_manager';
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                         break;
                     case 'section_head':
                         $user_role = 'section_head';
@@ -333,9 +390,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         break;
                 }
                 
+<<<<<<< HEAD
                 $hashed_password = password_hash($employee_id, PASSWORD_DEFAULT);
                 
                 $user_stmt = $conn->prepare("INSERT INTO users (email, first_name, last_name, gender, password, role, phone, address, employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+=======
+                // Create hashed password using employee_id
+                $hashed_password = password_hash($employee_id, PASSWORD_DEFAULT);
+                
+                // Insert user record
+                $user_stmt = $conn->prepare("INSERT INTO users (email, first_name, last_name, gender,password, role, phone, address, employee_id, created_at, updated_at) VALUES (?, ?, ?,?, ?, ?, ?, ?, ?, NOW(), NOW())");
+                
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 $user_stmt->bind_param("sssssssss", 
                     $email, 
                     $first_name, 
@@ -350,6 +416,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $user_stmt->execute();
                 
+<<<<<<< HEAD
                 $conn->commit();
                 
                 redirectWithMessage('employees.php', 'Employee, user account, and payroll entry created successfully! Default password is the employee ID.', 'success');
@@ -358,6 +425,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Error adding employee: ' . $e->getMessage();
             }
         } elseif ($action === 'edit' && hasPermission('hr_manager')) {
+=======
+                // Commit transaction
+                $conn->commit();
+                
+                redirectWithMessage('employees.php', 'Employee and user account created successfully! Default password is the employee ID.', 'success');
+            } catch (Exception $e) {
+                // Rollback transaction on error
+                $conn->rollback();
+                $error = 'Error adding employee: ' . $e->getMessage();
+            }
+        } } elseif ($action === 'edit' && hasPermission('hr_manager')) {
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             $id = $_POST['id'];
             $employee_id = sanitizeInput($_POST['employee_id']);
             $first_name = sanitizeInput($_POST['first_name']);
@@ -375,11 +454,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $employee_type = $_POST['employee_type'];
             $employment_type = $_POST['employment_type'];
             $employee_status = $_POST['employee_status'];
+<<<<<<< HEAD
             $job_group = in_array($_POST['job_group'], $job_groups) ? $_POST['job_group'] : null;
             
             try {
                 $conn->begin_transaction();
                 
+=======
+            
+            try {
+                // Start transaction
+                $conn->begin_transaction();
+                
+                // Get current employee_id for user update
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 $current_emp_stmt = $conn->prepare("SELECT employee_id FROM employees WHERE id = ?");
                 $current_emp_stmt->bind_param("i", $id);
                 $current_emp_stmt->execute();
@@ -387,6 +475,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $current_employee = $current_emp_result->fetch_assoc();
                 $old_employee_id = $current_employee['employee_id'];
                 
+<<<<<<< HEAD
+=======
+                // Update employee record
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 $stmt = $conn->prepare("UPDATE employees SET 
                     employee_id=?, 
                     first_name=?, 
@@ -404,11 +496,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     employee_type=?, 
                     employment_type=?, 
                     employee_status=?, 
+<<<<<<< HEAD
                     job_group=?,
                     updated_at=NOW() 
                     WHERE id=?");
                 
                 $stmt->bind_param("sssssssssiisssssi", 
+=======
+                    updated_at=NOW() 
+                    WHERE id=?");
+                
+                $stmt->bind_param("ssssssssssiissssi", 
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     $employee_id, 
                     $first_name, 
                     $last_name, 
@@ -425,7 +524,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $employee_type, 
                     $employment_type, 
                     $employee_status, 
+<<<<<<< HEAD
                     $job_group,
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     $id
                 );
                 
@@ -433,6 +535,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception("Execute failed: (" . $stmt->errno . ") " . $stmt->error);
                 }
                 
+<<<<<<< HEAD
                 // Update payroll table with job_group, employment_type, and status
                 $payroll_status = ($employee_status === 'active') ? 'active' : 'inactive';
                 $payroll_stmt = $conn->prepare("UPDATE payroll SET job_group = ?, employment_type = ?, status = ? WHERE emp_id = ?");
@@ -440,6 +543,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $payroll_stmt->execute();
                 
                 $user_role = 'employee';
+=======
+                // Determine user role based on employee type
+                $user_role = 'employee'; // default role
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 switch($employee_type) {
                     case 'managing_director':
                     case 'bod_chairman':
@@ -448,11 +555,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     case 'dept_head':
                         $user_role = 'dept_head';
                         break;
+<<<<<<< HEAD
                     case 'hr_manager':
                         $user_role = 'hr_manager';
                         break;
                     case 'manager':
                         $user_role = 'manager';
+=======
+                    case 'manager':
+                        $user_role = 'hr_manager';
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                         break;
                     case 'section_head':
                         $user_role = 'section_head';
@@ -462,9 +574,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         break;
                 }
                 
+<<<<<<< HEAD
                 $user_update_stmt = $conn->prepare("UPDATE users SET email=?, first_name=?, last_name=?, gender=?, role=?, phone=?, address=?, employee_id=?, updated_at=NOW() WHERE employee_id=?");
                 
                 $user_update_stmt->bind_param("sssssssss", 
+=======
+                // Update corresponding user record
+                $user_update_stmt = $conn->prepare("UPDATE users SET email=?, first_name=?, last_name=?,gender=?,role=?, phone=?, address=?, employee_id=?, updated_at=NOW() WHERE employee_id=?");
+                
+                $user_update_stmt->bind_param("ssssssss", 
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     $email, 
                     $first_name, 
                     $last_name,
@@ -478,10 +597,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $user_update_stmt->execute();
                 
+<<<<<<< HEAD
+=======
+                // Commit transaction
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 $conn->commit();
                 
                 redirectWithMessage('employees.php', 'Employee and user account updated successfully!', 'success');
             } catch (Exception $e) {
+<<<<<<< HEAD
                 $conn->rollback();
                 $error = 'Error updating employee: ' . $e->getMessage();
             }
@@ -634,6 +758,98 @@ if (isset($display_employee['id'])) {
 }
 
 include 'header.php';
+=======
+                // Rollback transaction on error
+                $conn->rollback();
+                $error = 'Error updating employee: ' . $e->getMessage();
+            }
+        }
+    }
+
+
+// Get filter parameters
+$search = $_GET['search'] ?? '';
+$department_filter = $_GET['department'] ?? '';
+$section_filter = $_GET['section'] ?? '';
+$type_filter = $_GET['type'] ?? '';
+$status_filter = $_GET['status'] ?? '';
+
+// Build query with filters
+$where_conditions = [];
+$params = [];
+$types = '';
+
+if (!empty($search)) {
+    $where_conditions[] = "(e.first_name LIKE ? OR e.last_name LIKE ? OR e.employee_id LIKE ? OR e.email LIKE ?)";
+    $search_param = "%$search%";
+    $params = array_merge($params, [$search_param, $search_param, $search_param, $search_param]);
+    $types .= 'ssss';
+}
+
+if (!empty($department_filter)) {
+    $where_conditions[] = "e.department_id = ?";
+    $params[] = $department_filter;
+    $types .= 'i';
+}
+
+if (!empty($section_filter)) {
+    $where_conditions[] = "e.section_id = ?";
+    $params[] = $section_filter;
+    $types .= 'i';
+}
+
+if (!empty($type_filter)) {
+    $where_conditions[] = "e.employee_type = ?";
+    $params[] = $type_filter;
+    $types .= 's';
+}
+
+if (!empty($status_filter)) {
+    $where_conditions[] = "e.employee_status = ?";
+    $params[] = $status_filter;
+    $types .= 's';
+}
+
+$where_clause = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+
+$query = "
+    SELECT e.*, 
+           COALESCE(e.first_name, '') as first_name,
+           COALESCE(e.last_name, '') as last_name,
+           d.name as department_name, 
+           s.name as section_name 
+    FROM employees e 
+    LEFT JOIN departments d ON e.department_id = d.id 
+    LEFT JOIN sections s ON e.section_id = s.id 
+    $where_clause
+    ORDER BY e.created_at DESC
+";
+
+$stmt = $conn->prepare($query);
+
+// Bind parameters if needed
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+
+$stmt->execute();
+$result = $stmt->get_result();
+$employees = $result->fetch_all(MYSQLI_ASSOC);
+
+// Get departments and sections for filters and forms
+$departments = $conn->query("SELECT * FROM departments ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+$sections = $conn->query("SELECT s.*, d.name as department_name FROM sections s LEFT JOIN departments d ON s.department_id = d.id ORDER BY d.name, s.name")->fetch_all(MYSQLI_ASSOC);
+
+// Leave applications query
+$applicationsQuery = "SELECT la.*, e.employee_id, e.first_name, e.last_name, 
+                      lt.name as leave_type_name, d.name as department_name, s.name as section_name
+                      FROM leave_applications la
+                      JOIN employees e ON la.employee_id = e.id
+                      JOIN leave_types lt ON la.leave_type_id = lt.id
+                      LEFT JOIN departments d ON e.department_id = d.id
+                      LEFT JOIN sections s ON e.section_id = s.id
+                      ORDER BY la.applied_at DESC";
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 ?>
 
 <!DOCTYPE html>
@@ -641,6 +857,7 @@ include 'header.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<<<<<<< HEAD
     <title>Profile - HR Management System</title>
     <link rel="stylesheet" href="style.css">
     <style>
@@ -1234,6 +1451,10 @@ include 'header.php';
     }
 }
     </style>
+=======
+    <title>Employees - HR Management System</title>
+    <link rel="stylesheet" href="style.css">
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 </head>
 <body>
     <div class="container">
@@ -1245,6 +1466,7 @@ include 'header.php';
             </div>
             <nav class="nav">
                 <ul>
+<<<<<<< HEAD
                     <li><a href="dashboard.php" class="active">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a></li>
@@ -1289,18 +1511,54 @@ include 'header.php';
         <div class="main-content">
             
             <!-- Content -->
+=======
+                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li><a href="employees.php" class="active">Employees</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="departments.php">Departments</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('super_admin')|| hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php">Admin</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')||hasPermission('dept_head')|| hasPermission('officer')): ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <button class="sidebar-toggle">☰</button>
+                <h1>Employee Management</h1>
+                <div class="user-info">
+                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
+                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
+                </div>
+            </div>
+            
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type']; ?>">
                         <?php echo htmlspecialchars($flash['message']); ?>
                     </div>
                 <?php endif; ?>
+<<<<<<< HEAD
   
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>
                 
+<<<<<<< HEAD
                 <div class="tabs">
                     <ul>
                         <li><a href="#" class="tab-link active" data-tab="profile">My Profile</a></li>
@@ -1514,6 +1772,126 @@ include 'header.php';
                     </div>
                     <?php endif; ?>
                 </div>
+=======
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Employees (<?php echo count($employees); ?>)</h2>
+                    <?php if (hasPermission('hr_manager')): ?>
+                        <button onclick="showAddModal()" class="btn btn-success">Add New Employee</button>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- Search and Filters -->
+                <div class="search-filters">
+                    <form method="GET" action="">
+                        <div class="filter-row">
+                            <div class="form-group">
+                                <label for="search">Search</label>
+                                <input type="text" class="form-control" id="search" name="search" 
+                                       value="<?php echo htmlspecialchars($search); ?>" 
+                                       placeholder="Name, ID, or Email">
+                            </div>
+                            <div class="form-group">
+                                <label for="department">Department</label>
+                                <select class="form-control" id="department" name="department">
+                                    <option value="">All Departments</option>
+                                    <?php foreach ($departments as $dept): ?>
+                                        <option value="<?php echo $dept['id']; ?>" 
+                                                <?php echo $department_filter == $dept['id'] ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($dept['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="type">Employee Type</label>
+                                <select class="form-control" id="type" name="type">
+                                    <option value="">All Types</option>
+                                    <option value="officer" <?php echo $type_filter === 'officer' ? 'selected' : ''; ?>>Officer</option>
+                                    <option value="section_head" <?php echo $type_filter === 'section_head' ? 'selected' : ''; ?>>Section Head</option>
+                                    <option value="manager" <?php echo $type_filter === 'manager' ? 'selected' : ''; ?>>Manager</option>
+                                    <option value="hr_manager" <?php echo $type_filter === 'hr_manager' ? 'selected' : ''; ?>>Human Resource Manager</option>
+                                    <option value="dept_head" <?php echo $type_filter === 'dept_head' ? 'selected' : ''; ?>>Department Head</option>
+                                    <option value="managing_director" <?php echo $type_filter === 'managing_director' ? 'selected' : ''; ?>>Managing Director</option>
+                                    <option value="bod_chairman" <?php echo $type_filter === 'bod_chairman' ? 'selected' : ''; ?>>BOD Chairmann</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="status">Status</label>
+                                <select class="form-control" id="status" name="status">
+                                    <option value="">All Status</option>
+                                    <option value="active" <?php echo $status_filter === 'active' ? 'selected' : ''; ?>>Active</option>
+                                    <option value="inactive" <?php echo $status_filter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                    <option value="resigned" <?php echo $status_filter === 'resigned' ? 'selected' : ''; ?>>Resigned</option>
+                                    <option value="fired" <?php echo $status_filter === 'fired' ? 'selected' : ''; ?>>Fired</option>
+                                    <option value="retired" <?php echo $status_filter === 'retired' ? 'selected' : ''; ?>>Retired</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">Filter</button>
+                                <a href="employees.php" class="btn btn-secondary">Clear</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Employees Table -->
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Employee ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Department</th>
+                                <th>Section</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($employees)): ?>
+                                <tr>
+                                    <td colspan="8" class="text-center">No employees found</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($employees as $employee): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($employee['employee_id']); ?></td>
+                                    <td><?php echo htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name']); ?></td>
+                                    <td><?php echo htmlspecialchars($employee['email'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($employee['department_name'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($employee['section_name'] ?? 'N/A'); ?></td>
+                                    <td>
+                                        <span class="badge <?php echo getEmployeeTypeBadge($employee['employee_type'] ?? ''); ?>">
+                                            <?php 
+                                            $type = $employee['employee_type'] ?? '';
+                                            echo $type ? ucwords(str_replace('_', ' ', $type)) : 'N/A'; 
+                                            ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge <?php echo getEmployeeStatusBadge($employee['employee_status'] ?? ''); ?>">
+                                            <?php 
+                                            $status = $employee['employee_status'] ?? '';
+                                            echo $status ? ucwords($status) : 'N/A'; 
+                                            ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if (hasPermission('hr_manager')): ?>
+                                            <button onclick="showEditModal(<?php echo htmlspecialchars(json_encode($employee)); ?>)" class="btn btn-sm btn-primary">Edit</button>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             </div>
         </div>
     </div>
@@ -1546,6 +1924,7 @@ include 'header.php';
                         <input type="text" class="form-control" id="last_name" name="last_name" required>
                     </div>
                     <div class="form-group">
+<<<<<<< HEAD
                         <label for="gender">Gender</label>
                         <select class="form-control" id="gender" name="gender" required>
                             <option value="">Select Gender</option>
@@ -1553,6 +1932,17 @@ include 'header.php';
                             <option value="female">Female</option>
                         </select>
                     </div>
+=======
+                        <label for="edit_employment_type">Gender</label>
+                        <select class="form-control" id="edit_gender" name="edit_gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                           
+                        </select>
+                    </div>
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     <div class="form-group">
                         <label for="national_id">National ID</label>
                         <input type="text" class="form-control" id="national_id" name="national_id" required>
@@ -1609,7 +1999,11 @@ include 'header.php';
                         <select class="form-control" id="employee_type" name="employee_type" required onchange="handleEmployeeTypeChange()">
                             <option value="">Select Type</option>
                             <option value="officer">Officer</option>
+<<<<<<< HEAD
                             <option value 'section_head'>Section Head</option>
+=======
+                            <option value="section_head">Section Head</option>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                             <option value="manager">Manager</option>
                             <option value="hr_manager">Human Resource Manager</option>
                             <option value="dept_head">Department Head</option>
@@ -1635,6 +2029,7 @@ include 'header.php';
                     </select>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
                     <label for="job_group">Job Group</label>
                     <select class="form-control" id="job_group" name="job_group" required>
@@ -1645,6 +2040,8 @@ include 'header.php';
                     </select>
                 </div>
                 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 <div class="form-actions">
                     <button type="submit" class="btn btn-success">Add Employee</button>
                     <button type="button" class="btn btn-secondary" onclick="hideAddModal()">Cancel</button>
@@ -1683,11 +2080,20 @@ include 'header.php';
                         <input type="text" class="form-control" id="edit_last_name" name="last_name" required>
                     </div>
                     <div class="form-group">
+<<<<<<< HEAD
                         <label for="edit_gender">Gender</label>
                         <select class="form-control" id="edit_gender" name="gender" required>
                             <option value="">Select Gender</option>
                             <option value="male">Male</option>
                             <option value="female">Female</option>
+=======
+                        <label for="edit_employment_type">Gender</label>
+                        <select class="form-control" id="edit_gender" name="edit_gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                           
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                         </select>
                     </div>
                     <div class="form-group">
@@ -1748,7 +2154,10 @@ include 'header.php';
                             <option value="officer">Officer</option>
                             <option value="section_head">Section Head</option>
                             <option value="manager">Manager</option>
+<<<<<<< HEAD
                             <option value="hr_manager">Human Resource Manager</option>
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                             <option value="dept_head">Department Head</option>
                             <option value="managing_director">Managing Director</option>
                             <option value="bod_chairman">BOD Chairman</option>
@@ -1780,11 +2189,16 @@ include 'header.php';
                             <option value="inactive">Inactive</option>
                             <option value="resigned">Resigned</option> 
                             <option value="fired">Fired</option> 
+<<<<<<< HEAD
                             <option value="retired">Retired</option>
+=======
+                            <option value="Retired">Retired</option>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                         </select>
                     </div>
                 </div>
                 
+<<<<<<< HEAD
                 <div class="form-group">
                     <label for="edit_job_group">Job Group</label>
                     <select class="form-control" id="edit_job_group" name="job_group" required>
@@ -1795,6 +2209,8 @@ include 'header.php';
                     </select>
                 </div>
                 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Update Employee</button>
                     <button type="button" class="btn btn-secondary" onclick="hideEditModal()">Cancel</button>
@@ -1804,6 +2220,7 @@ include 'header.php';
     </div>
     <?php endif; ?>
 
+<<<<<<< HEAD
     <!-- Upload Document Modal -->
     <div id="uploadModal" class="modal">
         <div class="modal-content">
@@ -1870,6 +2287,9 @@ include 'header.php';
             });
         });
 
+=======
+    <script>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         function showAddModal() {
             document.getElementById('addModal').style.display = 'block';
         }
@@ -1886,7 +2306,11 @@ include 'header.php';
             document.getElementById('edit_national_id').value = employee.national_id;
             document.getElementById('edit_email').value = employee.email;
             document.getElementById('edit_designation').value = employee.designation;
+<<<<<<< HEAD
             document.getElementById('edit_phone').value = employee.phone;
+=======
+            document.getElementById('edit_phone').value = employee.phone_number;
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             document.getElementById('edit_date_of_birth').value = employee.date_of_birth;
             document.getElementById('edit_hire_date').value = employee.hire_date;
             document.getElementById('edit_address').value = employee.address || '';
@@ -1894,14 +2318,23 @@ include 'header.php';
             document.getElementById('edit_employee_type').value = employee.employee_type;
             document.getElementById('edit_department_id').value = employee.department_id;
             document.getElementById('edit_employee_status').value = employee.employee_status;
+<<<<<<< HEAD
             document.getElementById('edit_gender').value = employee.gender;
             document.getElementById('edit_job_group').value = employee.job_group || '';
             
+=======
+            
+            // Update sections for selected department
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             updateEditSections();
             setTimeout(() => {
                 document.getElementById('edit_section_id').value = employee.section_id;
             }, 100);
             
+<<<<<<< HEAD
+=======
+            // Handle employee type visibility
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             handleEditEmployeeTypeChange();
             
             document.getElementById('editModal').style.display = 'block';
@@ -1911,6 +2344,7 @@ include 'header.php';
             document.getElementById('editModal').style.display = 'none';
         }
         
+<<<<<<< HEAD
         function showUploadModal() {
             document.getElementById('uploadModal').style.display = 'block';
         }
@@ -1951,10 +2385,13 @@ include 'header.php';
             }
         }
         
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         function handleEmployeeTypeChange() {
             const employeeType = document.getElementById('employee_type').value;
             const departmentGroup = document.getElementById('department_group');
             const sectionGroup = document.getElementById('section_group');
+<<<<<<< HEAD
             
             departmentGroup.style.display = 'none';
             sectionGroup.style.display = 'none';
@@ -1965,6 +2402,27 @@ include 'header.php';
                 // No department or section
             } else if (employeeType === 'dept_head') {
                 departmentGroup.style.display = 'block';
+=======
+            const sectionSelect = document.getElementById('section_id');
+            const departmentId = document.getElementById('department_id');
+
+            //Always hide both fields and clear their valued first
+
+            departmentGroup.style.display = 'none';
+            sectionGroup.style.display = 'none';
+            departmentId.value='';
+            sectionId.value='';
+            
+            if (employeeType === 'managing_director' || employeeType === 'bod_chairman') {
+                departmentGroup.style.display = 'none';
+                sectionGroup.style.display = 'none';
+                document.getElementById('department_id').value = '';
+                document.getElementById('section_id').value = '';
+            } else if (employeeType === 'dept_head') {
+                departmentGroup.style.display = 'block';
+                sectionGroup.style.display = 'none';
+                document.getElementById('section_id').value = '';
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             } else {
                 departmentGroup.style.display = 'block';
                 sectionGroup.style.display = 'block';
@@ -1975,9 +2433,17 @@ include 'header.php';
             const departmentId = document.getElementById('department_id').value;
             const sectionSelect = document.getElementById('section_id');
             
+<<<<<<< HEAD
             sectionSelect.innerHTML = '<option value="">Select Section</option>';
             
             if (departmentId) {
+=======
+            // Clear existing options
+            sectionSelect.innerHTML = '<option value="">Select Section</option>';
+            
+            if (departmentId) {
+                // Add sections for selected department
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 const sections = <?php echo json_encode($sections); ?>;
                 sections.forEach(function(section) {
                     if (section.department_id == departmentId) {
@@ -1995,6 +2461,7 @@ include 'header.php';
             const departmentGroup = document.getElementById('edit_department_group');
             const sectionGroup = document.getElementById('edit_section_group');
             
+<<<<<<< HEAD
             departmentGroup.style.display = 'none';
             sectionGroup.style.display = 'none';
             document.getElementById('edit_department_id').value = '';
@@ -2004,6 +2471,17 @@ include 'header.php';
                 // No department or section
             } else if (employeeType === 'dept_head') {
                 departmentGroup.style.display = 'block';
+=======
+            if (employeeType === 'managing_director' || employeeType === 'bod_chairman') {
+                departmentGroup.style.display = 'none';
+                sectionGroup.style.display = 'none';
+                document.getElementById('edit_department_id').value = '';
+                document.getElementById('edit_section_id').value = '';
+            } else if (employeeType === 'dept_head') {
+                departmentGroup.style.display = 'block';
+                sectionGroup.style.display = 'none';
+                document.getElementById('edit_section_id').value = '';
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             } else {
                 departmentGroup.style.display = 'block';
                 sectionGroup.style.display = 'block';
@@ -2014,9 +2492,17 @@ include 'header.php';
             const departmentId = document.getElementById('edit_department_id').value;
             const sectionSelect = document.getElementById('edit_section_id');
             
+<<<<<<< HEAD
             sectionSelect.innerHTML = '<option value="">Select Section</option>';
             
             if (departmentId) {
+=======
+            // Clear existing options
+            sectionSelect.innerHTML = '<option value="">Select Section</option>';
+            
+            if (departmentId) {
+                // Add sections for selected department
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 const sections = <?php echo json_encode($sections); ?>;
                 sections.forEach(function(section) {
                     if (section.department_id == departmentId) {
@@ -2029,20 +2515,30 @@ include 'header.php';
             }
         }
         
+<<<<<<< HEAD
         window.onclick = function(event) {
             const addModal = document.getElementById('addModal');
             const editModal = document.getElementById('editModal');
             const uploadModal = document.getElementById('uploadModal');
             const profileUploadModal = document.getElementById('profileUploadModal');
             
+=======
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const addModal = document.getElementById('addModal');
+            const editModal = document.getElementById('editModal');
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             if (event.target == addModal) {
                 hideAddModal();
             } else if (event.target == editModal) {
                 hideEditModal();
+<<<<<<< HEAD
             } else if (event.target == uploadModal) {
                 hideUploadModal();
             } else if (event.target == profileUploadModal) {
                 hideProfileUploadModal();
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             }
         }
     </script>

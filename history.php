@@ -14,7 +14,11 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
+<<<<<<< HEAD
 require_once 'header.php';
+=======
+
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 require_once 'config.php';
 $conn = getConnection();
 
@@ -100,13 +104,18 @@ try {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<<<<<<< HEAD
    <div class="container">
+=======
+    <div class="container">
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-brand">
                 <h1>HR System</h1>
                 <p>Management Portal</p>
             </div>
+<<<<<<< HEAD
             <nav class="nav">
                 <ul>
                     <li><a href="dashboard.php" class="active">
@@ -152,6 +161,37 @@ try {
         <!-- Main Content Area -->
         <div class="main-content">
             
+=======
+            <div class="nav">
+                <ul>
+                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li><a href="employees.php">Employees</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="departments.php">Departments</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('super_admin')|| hasPermission('hr_manager')): ?>
+                    <li><a href="admin.php">Admin</a></li>
+                    <?php endif; ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>Leave History</h1>
+                <div class="user-info">
+                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
+                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
+                </div>
+            </div>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 
             <div class="content">
                 <div class="leave-tabs">

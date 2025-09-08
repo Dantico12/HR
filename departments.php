@@ -6,7 +6,10 @@ error_reporting(E_ALL);
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
+<<<<<<< HEAD
 require_once 'header.php';
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 require_once 'config.php';
 $conn = getConnection();
 
@@ -192,7 +195,11 @@ try {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<<<<<<< HEAD
    <div class="container">
+=======
+    <div class="container">
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-brand">
@@ -201,6 +208,7 @@ try {
             </div>
             <nav class="nav">
                 <ul>
+<<<<<<< HEAD
                     <li><a href="dashboard.php" class="active">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a></li>
@@ -248,11 +256,47 @@ try {
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type']; ?>">
+=======
+                    <li><a href="dashboard.php">Dashboard</a></li>
+                    <li><a href="employees.php">Employees</a></li>
+                    <?php if (hasPermission('hr_manager') || hasPermission('super_admin')): ?>
+                    <li><a href="departments.php" class="active">Departments</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('super_admin')|| hasPermission('hr_manage')): ?>
+                    <li><a href="admin.php">Admin</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')||hasPermission('dept_head')): ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+        </div>
+
+        <div class="main-content">
+            <div class="header">
+                <h1>Department Management</h1>
+                <div class="user-info">
+                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
+                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
+                    <a href="logout.php" class="btn btn-secondary">Logout</a>
+                </div>
+            </div>
+            
+            <div class="content">
+                <?php $flash = getFlashMessage(); if ($flash): ?>
+                    <div class="alert alert-<?php echo htmlspecialchars($flash['type']); ?>">
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                         <?php echo htmlspecialchars($flash['message']); ?>
                     </div>
                 <?php endif; ?>
                 
+<<<<<<< HEAD
                 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                 <?php if (isset($error)): ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>

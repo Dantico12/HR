@@ -45,9 +45,14 @@
 }
 
 html, body {
+<<<<<<< HEAD
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+=======
+    height: 100%;
+    overflow-x: hidden;
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 }
 
 body {
@@ -1644,6 +1649,7 @@ textarea.form-control {
         display: block;
     }
 }
+<<<<<<< HEAD
 .deduction-preview {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
@@ -1757,3 +1763,5 @@ textarea.form-control {
     color: #dc3545;
     font-weight: 600;
 }
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3

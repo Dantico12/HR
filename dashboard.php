@@ -15,9 +15,12 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once 'config.php';
 
+<<<<<<< HEAD
 // Set page title for header
 $pageTitle = 'Dashboard';
 
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 // Get current user from session
 $user = [
     'first_name' => isset($_SESSION['user_name']) ? explode(' ', $_SESSION['user_name'])[0] : 'User',
@@ -86,7 +89,11 @@ function getFlashMessage() {
 // Get dashboard statistics
 $conn = getConnection();
 
+<<<<<<< HEAD
 // Total employees
+=======
+// Total employees - fixed column name
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 $result = $conn->query("SELECT COUNT(*) as count FROM employees WHERE employee_status = 'active'");
 $totalEmployees = $result->fetch_assoc()['count'];
 
@@ -125,6 +132,7 @@ if ($result) {
 
 // Close connection
 $conn->close();
+<<<<<<< HEAD
 
 // Include the header (which handles theme and sets up the HTML document)
 include 'header.php';
@@ -132,6 +140,17 @@ include 'header.php';
 
 <title><?php echo $pageTitle; ?> - HR Management System</title>
 
+=======
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - HR Management System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 <body>
     <div class="container">
         <!-- Sidebar -->
@@ -142,6 +161,7 @@ include 'header.php';
             </div>
             <nav class="nav">
                 <ul>
+<<<<<<< HEAD
                     <li><a href="dashboard.php" class="active">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a></li>
@@ -186,6 +206,40 @@ include 'header.php';
         <div class="main-content">
             
             <!-- Content -->
+=======
+                    <li><a href="dashboard.php" class="active">Dashboard</a></li>
+                    <li><a href="employees.php">Employees</a></li>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="departments.php">Departments</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('super_admin')): ?>
+                   <li><a href="admin.php?tab=users">Admin</a></li>
+                   <?php elseif (hasPermission('hr_manager')): ?>
+                  <li><a href="admin.php?tab=financial">Admin</a></li>
+                   <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')): ?>
+                    <li><a href="reports.php">Reports</a></li>
+                    <?php endif; ?>
+                    <?php if (hasPermission('hr_manager')|| hasPermission('super_admin')||hasPermission('dept_head')||hasPermission('officer')): ?>
+                    <li><a href="leave_management.php">Leave Management</a></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <button class="sidebar-toggle">☰</button>
+                <h1>HR Management Dashboard</h1>
+                <div class="user-info">
+                    <span>Welcome, <?php echo htmlspecialchars($user['first_name'] . ' ' . $user['last_name']); ?></span>
+                    <span class="badge badge-info"><?php echo ucwords(str_replace('_', ' ', $user['role'])); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">Logout</a>
+                </div>
+            </div>
+            
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
             <div class="content">
                 <?php $flash = getFlashMessage(); if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type']; ?>">
@@ -224,26 +278,38 @@ include 'header.php';
                                 <th>Type</th>
                                 <th>Status</th>
                                 <th>Hire Date</th>
+<<<<<<< HEAD
                                 <th>Actions</th>
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($recentEmployees)): ?>
                                 <tr>
+<<<<<<< HEAD
                                     <td colspan="8" class="text-center">
                                         <i class="fas fa-users fa-2x" style="color: var(--text-muted); margin-bottom: 1rem;"></i>
                                         <p style="color: var(--text-muted);">No employees found</p>
                                     </td>
+=======
+                                    <td colspan="7" class="text-center">No employees found</td>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($recentEmployees as $employee): ?>
                                 <tr>
+<<<<<<< HEAD
                                     <td>
                                         <strong><?php echo htmlspecialchars($employee['employee_id']); ?></strong>
                                     </td>
                                     <td>
                                         <?php echo htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name']); ?>
                                     </td>
+=======
+                                    <td><?php echo htmlspecialchars($employee['employee_id']); ?></td>
+                                    <td><?php echo htmlspecialchars($employee['first_name'] . ' ' . $employee['last_name']); ?></td>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                     <td><?php echo htmlspecialchars($employee['department_name'] ?? 'N/A'); ?></td>
                                     <td><?php echo htmlspecialchars($employee['section_name'] ?? 'N/A'); ?></td>
                                     <td>
@@ -263,6 +329,7 @@ include 'header.php';
                                         </span>
                                     </td>
                                     <td><?php echo formatDate($employee['hire_date']); ?></td>
+<<<<<<< HEAD
                                     <td>
                                         <div style="display: flex; gap: 0.25rem;">
                                             <a href="employees.php?action=view&id=<?php echo $employee['id']; ?>" 
@@ -281,6 +348,8 @@ include 'header.php';
                                             <?php endif; ?>
                                         </div>
                                     </td>
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                                 </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -289,6 +358,7 @@ include 'header.php';
                 </div>
                 
                 <div class="action-buttons">
+<<<<<<< HEAD
                     <a href="employees.php" class="btn btn-primary">
                         <i class="fas fa-users"></i> View All Employees
                     </a>
@@ -299,11 +369,17 @@ include 'header.php';
                         <a href="reports.php" class="btn btn-secondary">
                             <i class="fas fa-chart-bar"></i> Generate Report
                         </a>
+=======
+                    <a href="employees.php" class="btn btn-primary">View All Employees</a>
+                    <?php if (hasPermission('hr_manager')): ?>
+                        <a href="employees.php?action=add" class="btn btn-success">Add New Employee</a>
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
+<<<<<<< HEAD
     
     <script>
         // Auto-hide alerts after 5 seconds
@@ -319,5 +395,7 @@ include 'header.php';
             });
         });
     </script>
+=======
+>>>>>>> 86d68ff94e965ff4593e34aa4e2cc57edde6d5d3
 </body>
 </html>
